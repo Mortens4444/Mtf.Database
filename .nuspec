@@ -14,7 +14,7 @@
     <copyright>Copyright © 2024</copyright>
 	<license type="expression">MIT</license>
 	<projectUrl>https://github.com/Mortens4444/Mtf.Database</projectUrl>
-    <repository type="git" url="https://github.com/Mortens4444/Mtf.Database.git" branch="main" commit="00000000000000000000000000000000000000000" />
+    <repository type="git" url="https://github.com/Mortens4444/Mtf.Database.git" branch="main" commit="f0fad2cda80750970fd6198f34d079601640d849" />
 	<tags>SqlClient Sqlite Database Mortens</tags>
 	<readme>docs\ReadMe.md</readme>
     <dependencies>
