@@ -114,10 +114,10 @@ public class ExampleUsage
     public static void Main()
     {
         // Set up connection string and scripts
-		BaseRepository.DbProvider = DbProviderType.SQLite;
+        BaseRepository.DbProvider = DbProviderType.SQLite;
         BaseRepository.ConnectionString = "Data Source=MyAppDatabase.db;Version=3;";
-		BaseRepository.DatabaseScriptsAssembly = Assembly.GetEntryAssembly();
-		BaseRepository.DatabaseScriptsLocation = "MyApp.Database";
+        BaseRepository.DatabaseScriptsAssembly = Assembly.GetEntryAssembly();
+        BaseRepository.DatabaseScriptsLocation = "MyApp.Database";
         BaseRepository.ScriptsToExecute = new List<string> { "CreateDatabase", "Migration1" };
 
         // Use BaseRepository with SQL Server
