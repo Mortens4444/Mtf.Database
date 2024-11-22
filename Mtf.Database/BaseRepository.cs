@@ -10,23 +10,24 @@ using Mtf.Database.Services;
 using Mtf.Database.Enums;
 using System.Data.SQLite;
 using System.Reflection;
+using System.Collections.ObjectModel;
 
 namespace Mtf.Database
 {
-    public class BaseRepository
+    public abstract class BaseRepository
     {
         public static string ConnectionString { get; set; }
 
         public static DbProviderType DbProvider { get; set; } = DbProviderType.SqlServer;
 
-        public static List<string> ScriptsToExecute { get; set; }
+        public static List<string> ScriptsToExecute { get; set; } = new List<string>();
 
         public static Assembly DatabaseScriptsAssembly { get; set; }
 
         public static string DatabaseScriptsLocation { get; set; }
     }
 
-    public abstract class BaseRepository<T> : BaseRepository
+    public abstract class BaseRepository<TModelType> : BaseRepository
     {
         private static DbConnection CreateConnection()
         {
@@ -54,7 +55,7 @@ namespace Mtf.Database
                     {
                         foreach (var script in BaseRepository.ScriptsToExecute)
                         {
-                            connection.Execute(ResourceHelper.GetDbScript(script), transaction: transaction);
+                            _ = connection.Execute(ResourceHelper.GetDbScript(script), transaction: transaction);
                         }
                         transaction.Commit();
                     }
@@ -67,8 +68,13 @@ namespace Mtf.Database
             }
         }
 
-        protected T ExecuteInTransaction(Func<DbConnection, IDbTransaction, T> operation)
+        protected TModelType ExecuteInTransaction(Func<DbConnection, IDbTransaction, TModelType> operation)
         {
+            if (operation == null)
+            {
+                throw new ArgumentNullException(nameof(operation));
+            }
+
             using (var connection = CreateConnection())
             {
                 connection.Open();
@@ -91,6 +97,11 @@ namespace Mtf.Database
 
         protected void ExecuteInTransaction(Action<DbConnection, IDbTransaction> operation)
         {
+            if (operation == null)
+            {
+                throw new ArgumentNullException(nameof(operation));
+            }
+
             using (var connection = CreateConnection())
             {
                 connection.Open();
@@ -132,7 +143,7 @@ namespace Mtf.Database
             }
         }
 
-        protected void Execute(string scriptName, object param)
+        protected void Execute(string scriptName, object param = null)
         {
             using (var connection = CreateConnection())
             {
@@ -141,7 +152,7 @@ namespace Mtf.Database
                 {
                     try
                     {
-                        connection.Execute(ResourceHelper.GetDbScript(scriptName), param, transaction);
+                        _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, transaction);
                         transaction.Commit();
                     }
                     catch
@@ -155,6 +166,11 @@ namespace Mtf.Database
 
         protected void Execute(params SqlParam[] parameters)
         {
+            if (parameters == null || parameters.Length == 0)
+            {
+                return;
+            }
+
             using (var connection = CreateConnection())
             {
                 connection.Open();
@@ -164,7 +180,7 @@ namespace Mtf.Database
                     {
                         foreach (var parameter in parameters)
                         {
-                            connection.Execute(ResourceHelper.GetDbScript(parameter.ScriptName), parameter.Param, transaction);
+                            _ = connection.Execute(ResourceHelper.GetDbScript(parameter.ScriptName), parameter.Param, transaction);
                         }
                         transaction.Commit();
                     }
@@ -177,69 +193,69 @@ namespace Mtf.Database
             }
         }
 
-        protected List<T> Query(string scriptName)
+        protected ReadOnlyCollection<TModelType> Query(string scriptName)
         {
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.Query<T>(ResourceHelper.GetDbScript(scriptName)).ToList();
+                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ResourceHelper.GetDbScript(scriptName)).ToList());
             }
         }
 
-        protected List<T> Query(string scriptName, object param)
+        protected ReadOnlyCollection<TModelType> Query(string scriptName, object param)
         {
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.Query<T>(ResourceHelper.GetDbScript(scriptName), param).ToList();
+                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ResourceHelper.GetDbScript(scriptName), param).ToList());
             }
         }
 
-        protected T QuerySingleOrDefault(string scriptName, int id)
+        protected TModelType QuerySingleOrDefault(string scriptName, int id)
         {
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.QuerySingleOrDefault<T>(ResourceHelper.GetDbScript(scriptName), new { Id = id });
+                return connection.QuerySingleOrDefault<TModelType>(ResourceHelper.GetDbScript(scriptName), new { Id = id });
             }
         }
 
-        protected T QuerySingleOrDefault(string scriptName, object param)
+        protected TModelType QuerySingleOrDefault(string scriptName, object param)
         {
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.QuerySingleOrDefault<T>(ResourceHelper.GetDbScript(scriptName), param);
+                return connection.QuerySingleOrDefault<TModelType>(ResourceHelper.GetDbScript(scriptName), param);
             }
         }
 
-        public T Get(int id)
+        public TModelType Get(int id)
         {
-            var queryName = $"Select{typeof(T).Name}";
+            var queryName = $"Select{typeof(TModelType).Name}";
             return QuerySingleOrDefault(queryName, id);
         }
 
-        public List<T> GetAll()
+        public ReadOnlyCollection<TModelType> GetAll()
         {
-            var queryName = $"SelectAll{typeof(T).Name}";
+            var queryName = $"SelectAll{typeof(TModelType).Name}";
             return Query(queryName);
         }
 
-        public List<T> GetWhere(object param)
+        public ReadOnlyCollection<TModelType> GetWhere(object param)
         {
-            var queryName = $"SelectAll{typeof(T).Name}";
+            var queryName = $"SelectAll{typeof(TModelType).Name}";
             return Query(queryName, param);
         }
 
         public void Delete(int id)
         {
-            var scriptName = $"Delete{typeof(T).Name}";
+            var scriptName = $"Delete{typeof(TModelType).Name}";
             Execute(scriptName, new { Id = id });
         }
 
         public void DeleteWhere(object param)
         {
-            var scriptName = $"Delete{typeof(T).Name}";
+            var scriptName = $"Delete{typeof(TModelType).Name}";
             Execute(scriptName, param);
         }
     }

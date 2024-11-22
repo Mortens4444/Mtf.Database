@@ -7,8 +7,6 @@ namespace Mtf.Database.Services
 {
     internal static class ResourceHelper
     {
-        private static readonly char[] lineSeparators = new[] { '\r', '\n' };
-
         internal static string GetDbScript(string scriptName)
         {
             return ReadEmbeddedResource(String.Concat(BaseRepository.DatabaseScriptsLocation, ".", scriptName, ".sql"), Encoding.UTF8);
