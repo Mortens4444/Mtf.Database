@@ -193,6 +193,38 @@ namespace Mtf.Database
             }
         }
 
+        protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object param = null)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                return new ReadOnlyCollection<TModelType>(
+                    connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList()
+                );
+            }
+        }
+
+        protected void ExecuteStoredProcedureNonQuery(string procedureName, object param = null)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                using (var transaction = connection.BeginTransaction())
+                {
+                    try
+                    {
+                        _ = connection.Execute(procedureName, param, transaction, commandType: CommandType.StoredProcedure);
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
         protected ReadOnlyCollection<TModelType> Query(string scriptName)
         {
             using (var connection = CreateConnection())
