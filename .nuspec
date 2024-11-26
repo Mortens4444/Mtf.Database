@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
     <id>Mtf.Database</id>
-    <version>1.0.8</version>
+    <version>1.0.9</version>
     <description>
       Database connections (SqlClient, SQLite).
 
@@ -14,7 +14,7 @@
     <copyright>Copyright © 2024</copyright>
 	<license type="expression">MIT</license>
 	<projectUrl>https://github.com/Mortens4444/Mtf.Database</projectUrl>
-    <repository type="git" url="https://github.com/Mortens4444/Mtf.Database.git" branch="main" commit="2afb636ab30ed9749acce86c73c076c6dff01541" />
+    <repository type="git" url="https://github.com/Mortens4444/Mtf.Database.git" branch="main" commit="c833bc1fb8db26c64890ac047d0e09775c348bd2" />
 	<tags>SqlClient Sqlite Database BaseRepository Mortens</tags>
 	<readme>docs\ReadMe.md</readme>
     <dependencies>

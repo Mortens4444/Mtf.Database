@@ -24,65 +24,134 @@ To use `Mtf.Database`, add the package to your project:
    using Mtf.Database;
    ```
 
+## **Class: `BaseRepository`**
+
+The `BaseRepository` class serves as the base for managing database operations. It supports automatic transaction handling, script execution, and type-safe operations.
+
+### **Static Properties**
+
+| Property                  | Type             | Description                                                |
+|---------------------------|------------------|------------------------------------------------------------|
+| `DbProvider`              | `DbProviderType` | Specifies the database provider (`SQLite` or `SqlServer`). |
+| `ConnectionString`        | `string`         | Connection string for the database.                        |
+| `ScriptsToExecute`        | `List<string>`   | SQL scripts to execute during initialization.              |
+| `DatabaseScriptsAssembly` | `Assembly`       | Assembly containing embedded SQL scripts.                  |
+| `DatabaseScriptsLocation` | `string`         | Namespace location of embedded SQL scripts.                |
+
+---
+
+### Enum: DbProviderType
+
+Defines the database types supported by `BaseRepository`.
+
+| Value       | Description                             |
+|-------------|-----------------------------------------|
+| `SQLite`    | SQLite database engine.                 |
+| `SqlServer` | SQL Server database engine.             |
+
+### **Static Methods**
+
+#### **Transactional Script Execution**
+
+- **`Execute(string scriptName, object param = null)`**  
+  Executes a script wrapped in a transaction.
+
+  ```csharp
+  BaseRepository.Execute("UpdateServer", new { Id = 1, Name = "UpdatedServer" });
+  ```
+
+- **`ExecuteWithoutTransaction(string scriptName, object param = null)`**  
+  Executes a script without a transaction.
+
+  ```csharp
+  BaseRepository.ExecuteWithoutTransaction("InsertServer", new { Name = "NewServer" });
+  ```
+
+- **`Execute(params SqlParam[] parameters)`**  
+  Executes multiple scripts in a single transaction. Each `SqlParam` includes the script name and parameters.
+
+  ```csharp
+  BaseRepository.Execute(
+      new SqlParam("UpdateServer", new { Id = 1, Name = "UpdatedServer" }),
+      new SqlParam("DeleteServer", new { Id = 2 })
+  );
+  ```
+
+---
+
 ## Class: BaseRepository<T>
 
 The `BaseRepository` class provides common database operations, such as executing scripts and querying data. The class supports both SQLite and SQL Server, with automatic handling of transactions to ensure data consistency.
 
-### Constructors
+### **Instance Methods (`BaseRepository<T>`)**
 
-The `BaseRepository` class provides two constructors to support different database engines:
+#### **Transaction Handling**
 
-- **`BaseRepository()`**  
-  Uses SQLite as the default database engine if no type is specified.
+- **`T ExecuteInTransaction(Func<DbConnection, IDbTransaction, T> operation)`**  
+  Executes a transactional operation that returns a result.
 
-- **`BaseRepository(DatabaseType type)`**  
-  Allows selection of either SQLite or SQL Server as the database engine.
+  ```csharp
+  var result = repository.ExecuteInTransaction((connection, transaction) =>
+  {
+      // Perform database actions
+      return someResult;
+  });
+  ```
 
-### Properties
+- **`void ExecuteInTransaction(Action<DbConnection, IDbTransaction> operation)`**  
+  Executes a transactional operation without returning a result.
 
-| Property                  | Type             | Description                                       |
-|---------------------------|------------------|---------------------------------------------------|
-| `DbProvider`              | `DbProviderType` | Choose your DbProvider (SQLite, SqlServer).       |
-| `ConnectionString`        | `string`         | Connection string for the database.               |
-| `ScriptsToExecute`        | `List<string>`   | List of SQL scripts to execute at initialization. |
-| `DatabaseScriptsAssembly` | `Assembly`       | The assembly of the database scripts.             |
-| `DatabaseScriptsLocation` | `string`         | The location of the database scripts.             |
+  ```csharp
+  repository.ExecuteInTransaction((connection, transaction) =>
+  {
+      // Perform database actions
+  });
+  ```
 
-### Enum: DatabaseType
+---
 
-Defines the database types supported by `BaseRepository`.
+#### **Query and Execution**
 
-| Enum Value            | Description                             |
-|-----------------------|-----------------------------------------|
-| `SQLite`              | Uses SQLite as the database engine.     |
-| `SQLServer`           | Uses SQL Server as the database engine. |
+- **`TModelType QuerySingleOrDefault(string scriptName, object param)`**  
+  Returns a single record or `null` if none exist.
 
-### Methods
+  ```csharp
+  var server = repository.QuerySingleOrDefault("SelectServerById", new { Id = 1 });
+  ```
 
-#### Transactional Execution
+- **`ReadOnlyCollection<TModelType> Query(string scriptName, object param)`**  
+  Returns a list of records matching the parameters.
 
-- **`T ExecuteInTransaction(Func<IDbConnection, IDbTransaction, T> operation)`**  
-  Executes a transactional operation and returns a result.
-
-- **`void ExecuteInTransaction(Action<IDbConnection, IDbTransaction> operation)`**  
-  Executes a transactional operation with no return value.
-
-#### Query and Execution
-
-- **`List<T> Query(string scriptName)`**  
-  Executes a query script and returns a list of results.
-
-- **`List<T> Query(string scriptName, object param)`**  
-  Executes a parameterized query script and returns a list of results.
-
-- **`T QuerySingleOrDefault(string scriptName, object param)`**  
-  Executes a single-result query with parameters and returns the result.
-
-- **`void Execute(string scriptName, object param)`**  
-  Executes a script with parameters without returning a value.
+  ```csharp
+  var servers = repository.Query("SelectServersByLocation", new { Location = "Europe" });
+  ```
 
 - **`TResultType ExecuteScalar<TResultType>(string scriptName, object param)`**  
-  Executes a script and returns a scalar result of specified type.
+  Executes a script and returns a scalar value.
+
+  ```csharp
+  int serverCount = repository.ExecuteScalar<int>("CountServers", null);
+  ```
+
+---
+
+#### **Stored Procedures**
+
+- **`ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object param = null)`**  
+  Executes a stored procedure and returns a list of results.
+
+  ```csharp
+  var servers = repository.ExecuteStoredProcedure("GetAllServers", new { Status = "Active" });
+  ```
+
+- **`void ExecuteStoredProcedureNonQuery(string procedureName, object param = null)`**  
+  Executes a stored procedure without returning results.
+
+  ```csharp
+  repository.ExecuteStoredProcedureNonQuery("DeactivateServer", new { Id = 1 });
+  ```
+
+---
 
 #### CRUD Operations
 
@@ -105,37 +174,47 @@ Defines the database types supported by `BaseRepository`.
 
 ```csharp
 using Mtf.Database;
-using Mtf.Database.Models;
-using System;
 using System.Collections.Generic;
 
 public class ExampleUsage
 {
     public static void Main()
     {
-        // Set up connection string and scripts
-        BaseRepository.DbProvider = DbProviderType.SQLite;
-        BaseRepository.ConnectionString = "Data Source=MyAppDatabase.db;Version=3;";
-        BaseRepository.DatabaseScriptsAssembly = Assembly.GetEntryAssembly();
-        BaseRepository.DatabaseScriptsLocation = "MyApp.Database";
-        BaseRepository.ScriptsToExecute = new List<string> { "CreateDatabase", "Migration1" };
+        // Configure the repository
+        BaseRepository.DatabaseScriptsAssembly = typeof(CameraRepository<>).Assembly;
+        BaseRepository.DatabaseScriptsLocation = "Database.Scripts";
 
-        // Use BaseRepository with SQL Server
-        var serverRepository = new ServerRepository<Server>();
+        BaseRepository.ConnectionString = ConfigurationManager.ConnectionStrings["MasterConnectionString"]?.ConnectionString;
+        BaseRepository.ExecuteWithoutTransaction("CreateDatabase");
+        BaseRepository.ExecuteWithoutTransaction("CreateUser");
 
-        // Insert and retrieve data
-        var server = serverRepository.Get(1);
-        Console.WriteLine($"Server ID: {server.Id}");
+        BaseRepository.ConnectionString = ConfigurationManager.ConnectionStrings["LiveViewConnectionString"]?.ConnectionString;
+        BaseRepository.ExecuteWithoutTransaction("CreateTables");
 
-        // Delete data
-        serverRepository.Delete(1);
-        Console.WriteLine("Server deleted.");
+        // Add initialization scripts
+        BaseRepository.ScriptsToExecute.Add("Migration_1");
+
+        // Perform database operations
+        var repository = new ServerRepository();
+
+        // Insert a new server
+        BaseRepository.Execute("InsertServer", new { Name = "NewServer", Location = "USA" });
+
+        // Retrieve all servers
+        var servers = repository.GetAll();
+        foreach (var server in servers)
+        {
+            Console.WriteLine($"Server: {server.Name}, Location: {server.Location}");
+        }
+
+        // Delete a server
+        repository.Delete(1);
     }
 }
 ```
 
 ### Notes
 
-- **Transactions**: `BaseRepository` automatically wraps operations in transactions for data consistency.
-- **Script Management**: Define SQL scripts in `ScriptsToExecute` to automate setup tasks, such as creating tables.
-- **Error Handling**: Wrap methods in `try-catch` blocks to manage exceptions during database interactions.
+1. **Enhanced Transaction Management**: Automatic transaction rollback on failure ensures data consistency.
+2. **Flexible Execution**: Execute both SQL scripts and stored procedures.
+3. **Reusable Scripts**: Centralized SQL script management using embedded resources.
