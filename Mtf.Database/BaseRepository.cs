@@ -41,6 +41,15 @@ namespace Mtf.Database
             }
         }
 
+        public static void ExecuteWithoutTransaction(string scriptName, object param = null)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param);
+            }
+        }
+
         public static void Execute(string scriptName, object param = null)
         {
             using (var connection = CreateConnection())
