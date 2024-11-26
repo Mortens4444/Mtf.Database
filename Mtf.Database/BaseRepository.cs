@@ -25,11 +25,8 @@ namespace Mtf.Database
         public static Assembly DatabaseScriptsAssembly { get; set; }
 
         public static string DatabaseScriptsLocation { get; set; }
-    }
 
-    public abstract class BaseRepository<TModelType> : BaseRepository
-    {
-        private static DbConnection CreateConnection()
+        protected static DbConnection CreateConnection()
         {
             switch (DbProvider)
             {
@@ -44,6 +41,59 @@ namespace Mtf.Database
             }
         }
 
+        public static void Execute(string scriptName, object param = null)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                using (var transaction = connection.BeginTransaction())
+                {
+                    try
+                    {
+                        _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, transaction);
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        public static void Execute(params SqlParam[] parameters)
+        {
+            if (parameters == null || parameters.Length == 0)
+            {
+                return;
+            }
+
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                using (var transaction = connection.BeginTransaction())
+                {
+                    try
+                    {
+                        foreach (var parameter in parameters)
+                        {
+                            _ = connection.Execute(ResourceHelper.GetDbScript(parameter.ScriptName), parameter.Param, transaction);
+                        }
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+    }
+
+    public abstract class BaseRepository<TModelType> : BaseRepository
+    {
         static BaseRepository()
         {
             using (var connection = CreateConnection())
@@ -133,56 +183,6 @@ namespace Mtf.Database
                         var result = connection.ExecuteScalar<TResultType>(ResourceHelper.GetDbScript(scriptName), param, transaction);
                         transaction.Commit();
                         return result;
-                    }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
-                    }
-                }
-            }
-        }
-
-        protected void Execute(string scriptName, object param = null)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    try
-                    {
-                        _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, transaction);
-                        transaction.Commit();
-                    }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
-                    }
-                }
-            }
-        }
-
-        protected void Execute(params SqlParam[] parameters)
-        {
-            if (parameters == null || parameters.Length == 0)
-            {
-                return;
-            }
-
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    try
-                    {
-                        foreach (var parameter in parameters)
-                        {
-                            _ = connection.Execute(ResourceHelper.GetDbScript(parameter.ScriptName), parameter.Param, transaction);
-                        }
-                        transaction.Commit();
                     }
                     catch
                     {
