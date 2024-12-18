@@ -99,6 +99,15 @@ namespace Mtf.Database
                 }
             }
         }
+
+        public static string ExecuteScalarQuery(string query)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                return connection.ExecuteScalar<string>(query);
+            }
+        }
     }
 
     public abstract class BaseRepository<TModelType> : BaseRepository
@@ -177,15 +186,6 @@ namespace Mtf.Database
                         throw;
                     }
                 }
-            }
-        }
-
-        public string ExecuteScalarQuery(string query)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return connection.ExecuteScalar<string>(query);
             }
         }
 
