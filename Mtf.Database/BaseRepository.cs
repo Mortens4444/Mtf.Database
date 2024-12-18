@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
 using Mtf.Database.Enums;
 using Mtf.Database.Models;
 using Mtf.Database.Services;
@@ -8,7 +9,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
-using System.Data.SQLite;
 using System.Linq;
 using System.Reflection;
 
@@ -31,7 +31,7 @@ namespace Mtf.Database
             switch (DbProvider)
             {
                 case DbProviderType.SQLite:
-                    return new SQLiteConnection(ConnectionString);
+                    return new SqliteConnection(ConnectionString);
 
                 case DbProviderType.SqlServer:
                     return new SqlConnection(ConnectionString);
