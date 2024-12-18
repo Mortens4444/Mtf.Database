@@ -1,16 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Data.Common;
-using System.Data.SqlClient;
-using Dapper;
-using System.Linq;
+﻿using Dapper;
+using Microsoft.Data.SqlClient;
+using Mtf.Database.Enums;
 using Mtf.Database.Models;
 using Mtf.Database.Services;
-using Mtf.Database.Enums;
-using System.Data.SQLite;
-using System.Reflection;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Data;
+using System.Data.Common;
+using System.Data.SQLite;
+using System.Linq;
+using System.Reflection;
 
 namespace Mtf.Database
 {
@@ -20,7 +20,7 @@ namespace Mtf.Database
 
         public static DbProviderType DbProvider { get; set; } = DbProviderType.SqlServer;
 
-        public static List<string> ScriptsToExecute { get; set; } = new List<string>();
+        public static ReadOnlyCollection<string> ScriptsToExecute { get; } = new ReadOnlyCollection<string>(new List<string>());
 
         public static Assembly DatabaseScriptsAssembly { get; set; }
 
@@ -112,7 +112,7 @@ namespace Mtf.Database
                 {
                     try
                     {
-                        foreach (var script in BaseRepository.ScriptsToExecute)
+                        foreach (var script in ScriptsToExecute)
                         {
                             _ = connection.Execute(ResourceHelper.GetDbScript(script), transaction: transaction);
                         }
@@ -177,6 +177,15 @@ namespace Mtf.Database
                         throw;
                     }
                 }
+            }
+        }
+
+        public string ExecuteScalarQuery(string query)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                return connection.ExecuteScalar<string>(query);
             }
         }
 
@@ -286,6 +295,42 @@ namespace Mtf.Database
         {
             var queryName = $"SelectAll{typeof(TModelType).Name}";
             return Query(queryName, param);
+        }
+
+        public void Insert(TModelType model)
+        {
+            var scriptName = $"Insert{typeof(TModelType).Name}";
+            Execute(scriptName, model);
+        }
+
+        public int InsertAndReturnId(TModelType model)
+        {
+            var scriptName = $"Insert{typeof(TModelType).Name}";
+
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                using (var transaction = connection.BeginTransaction())
+                {
+                    try
+                    {
+                        var result = connection.ExecuteScalar<int>(ResourceHelper.GetDbScript(scriptName) + "; SELECT CAST(SCOPE_IDENTITY() AS INT);", model, transaction);
+                        transaction.Commit();
+                        return result;
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        public void Update(TModelType model)
+        {
+            var scriptName = $"Update{typeof(TModelType).Name}";
+            Execute(scriptName, model);
         }
 
         public void Delete(int id)
