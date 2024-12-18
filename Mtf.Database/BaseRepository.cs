@@ -20,7 +20,7 @@ namespace Mtf.Database
 
         public static DbProviderType DbProvider { get; set; } = DbProviderType.SqlServer;
 
-        public static ReadOnlyCollection<string> ScriptsToExecute { get; } = new ReadOnlyCollection<string>(new List<string>());
+        public static List<string> ScriptsToExecute { get; } = new List<string>();
 
         public static Assembly DatabaseScriptsAssembly { get; set; }
 
