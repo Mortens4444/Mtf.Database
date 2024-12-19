@@ -18,6 +18,8 @@ namespace Mtf.Database
     {
         public static string ConnectionString { get; set; }
 
+        public static int? CommandTimeout { get; set; }
+
         public static DbProviderType DbProvider { get; set; } = DbProviderType.SqlServer;
 
         public static List<string> ScriptsToExecute { get; } = new List<string>();
@@ -46,7 +48,7 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param);
+                _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, commandTimeout: CommandTimeout);
             }
         }
 
@@ -59,7 +61,7 @@ namespace Mtf.Database
                 {
                     try
                     {
-                        _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, transaction);
+                        _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, transaction, CommandTimeout);
                         transaction.Commit();
                     }
                     catch
@@ -87,7 +89,7 @@ namespace Mtf.Database
                     {
                         foreach (var parameter in parameters)
                         {
-                            _ = connection.Execute(ResourceHelper.GetDbScript(parameter.ScriptName), parameter.Param, transaction);
+                            _ = connection.Execute(ResourceHelper.GetDbScript(parameter.ScriptName), parameter.Param, transaction, CommandTimeout);
                         }
                         transaction.Commit();
                     }
@@ -105,7 +107,7 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.ExecuteScalar<string>(query);
+                return connection.ExecuteScalar<string>(query, commandTimeout: CommandTimeout);
             }
         }
     }
@@ -123,7 +125,7 @@ namespace Mtf.Database
                     {
                         foreach (var script in ScriptsToExecute)
                         {
-                            _ = connection.Execute(ResourceHelper.GetDbScript(script), transaction: transaction);
+                            _ = connection.Execute(ResourceHelper.GetDbScript(script), transaction: transaction, commandTimeout: CommandTimeout);
                         }
                         transaction.Commit();
                     }
@@ -198,7 +200,7 @@ namespace Mtf.Database
                 {
                     try
                     {
-                        var result = connection.ExecuteScalar<TResultType>(ResourceHelper.GetDbScript(scriptName), param, transaction);
+                        var result = connection.ExecuteScalar<TResultType>(ResourceHelper.GetDbScript(scriptName), param, transaction, CommandTimeout);
                         transaction.Commit();
                         return result;
                     }
@@ -231,7 +233,7 @@ namespace Mtf.Database
                 {
                     try
                     {
-                        _ = connection.Execute(procedureName, param, transaction, commandType: CommandType.StoredProcedure);
+                        _ = connection.Execute(procedureName, param, transaction, CommandTimeout, CommandType.StoredProcedure);
                         transaction.Commit();
                     }
                     catch
@@ -314,7 +316,7 @@ namespace Mtf.Database
                 {
                     try
                     {
-                        var result = connection.ExecuteScalar<int>(ResourceHelper.GetDbScript(scriptName) + "; SELECT CAST(SCOPE_IDENTITY() AS INT);", model, transaction);
+                        var result = connection.ExecuteScalar<int>(ResourceHelper.GetDbScript(scriptName) + "; SELECT CAST(SCOPE_IDENTITY() AS INT);", model, transaction, CommandTimeout);
                         transaction.Commit();
                         return result;
                     }
