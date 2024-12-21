@@ -263,6 +263,15 @@ namespace Mtf.Database
             }
         }
 
+        protected TModelType QuerySingleOrDefault(string scriptName, long id)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                return connection.QuerySingleOrDefault<TModelType>(ResourceHelper.GetDbScript(scriptName), new { Id = id });
+            }
+        }
+
         protected TModelType QuerySingleOrDefault(string scriptName, int id)
         {
             using (var connection = CreateConnection())
@@ -279,6 +288,12 @@ namespace Mtf.Database
                 connection.Open();
                 return connection.QuerySingleOrDefault<TModelType>(ResourceHelper.GetDbScript(scriptName), param);
             }
+        }
+
+        public TModelType Get(long id)
+        {
+            var queryName = $"Select{typeof(TModelType).Name}";
+            return QuerySingleOrDefault(queryName, id);
         }
 
         public TModelType Get(int id)
@@ -333,6 +348,12 @@ namespace Mtf.Database
         {
             var scriptName = $"Update{typeof(TModelType).Name}";
             Execute(scriptName, model);
+        }
+
+        public void Delete(long id)
+        {
+            var scriptName = $"Delete{typeof(TModelType).Name}";
+            Execute(scriptName, new { Id = id });
         }
 
         public void Delete(int id)
