@@ -110,6 +110,75 @@ namespace Mtf.Database
                 return connection.ExecuteScalar<string>(query, commandTimeout: CommandTimeout);
             }
         }
+
+        public static DataTable ExecuteQuery(string query, Dictionary<string, object> parameters = null)
+        {
+            if (!IsQuerySeemsSafe(query))
+            {
+                throw new ArgumentException("The SQL query contains potentially unsafe content.");
+            }
+
+            using (var connection = CreateConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = query;
+                command.CommandTimeout = CommandTimeout ?? 30;
+
+                if (parameters != null)
+                {
+                    foreach (var param in parameters)
+                    {
+                        var parameter = command.CreateParameter();
+                        parameter.ParameterName = param.Key;
+                        parameter.Value = param.Value ?? DBNull.Value;
+                        _ = command.Parameters.Add(parameter);
+                    }
+                }
+
+                var dataTable = new DataTable();
+                connection.Open();
+
+                using (var reader = command.ExecuteReader())
+                {
+                    dataTable.Load(reader);
+                }
+
+                return dataTable;
+            }
+        }
+
+        public static bool IsQuerySeemsSafe(string query)
+        {
+            if (String.IsNullOrWhiteSpace(query))
+            {
+                return false;
+            }
+
+            // Define dangerous keywords or patterns
+            var dangerousKeywords = new[]
+            {
+                "drop ", "delete ", "insert ", "update ", "--", ";", "/*", "*/", "xp_"
+            };
+
+            // Check if the query contains any of the dangerous patterns
+            foreach (var keyword in dangerousKeywords)
+            {
+                if (query.IndexOf(keyword, 0, query.Length, StringComparison.OrdinalIgnoreCase) != -1)
+                {
+                    return false;
+                }
+            }
+
+            // Optional: Check for balanced quotes (basic validation)
+            var singleQuotes = query.Count(c => c == '\'');
+            var doubleQuotes = query.Count(c => c == '"');
+            if (singleQuotes % 2 != 0 || doubleQuotes % 2 != 0)
+            {
+                return false; // Unbalanced quotes are suspicious
+            }
+
+            return true; // Query seems safe
+        }
     }
 
     public abstract class BaseRepository<TModelType> : BaseRepository
