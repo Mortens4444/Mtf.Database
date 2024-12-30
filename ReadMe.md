@@ -155,13 +155,13 @@ The `BaseRepository` class provides common database operations, such as executin
 
 #### CRUD Operations
 
-- **`T Get(int id)`**  
+- **`T Select(int id)`**  
   Retrieves a single record by ID.
 
-- **`List<T> GetAll()`**  
+- **`List<T> SelectAll()`**  
   Retrieves all records for the entity.
 
-- **`List<T> GetWhere(object param)`**  
+- **`List<T> SelectWhere(object param)`**  
   Retrieves records that match the specified parameters.
 
 - **`void Delete(int id)`**  

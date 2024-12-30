@@ -1,8 +1,6 @@
 ﻿using Dapper;
-using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
-using Mtf.Database.Enums;
-using Mtf.Database.Models;
+using Mtf.Database.Interfaces;
 using Mtf.Database.Services;
 using System;
 using System.Collections.Generic;
@@ -10,179 +8,31 @@ using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
-using System.Reflection;
 
 namespace Mtf.Database
 {
-    public abstract class BaseRepository
+    public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<TModelType>
     {
-        public static string ConnectionString { get; set; }
+        private static readonly string SelectScriptName = $"{nameof(Select)}{typeof(TModelType).Name}";
+        private static readonly string SelectAllScriptName = $"{nameof(SelectAll)}{typeof(TModelType).Name}";
+        private static readonly string SelectWhereScriptName = $"{nameof(SelectWhere)}{typeof(TModelType).Name}";
+        private static readonly string InsertScriptName = $"{nameof(Insert)}{typeof(TModelType).Name}";
+        private static readonly string UpdateScriptName = $"{nameof(Update)}{typeof(TModelType).Name}";
+        private static readonly string DeleteScriptName = $"{nameof(Delete)}{typeof(TModelType).Name}";
+        private static readonly string DeleteWhereScriptName = $"{nameof(DeleteWhere)}{typeof(TModelType).Name}";
 
-        public static int? CommandTimeout { get; set; }
-
-        public static DbProviderType DbProvider { get; set; } = DbProviderType.SqlServer;
-
-        public static List<string> ScriptsToExecute { get; } = new List<string>();
-
-        public static Assembly DatabaseScriptsAssembly { get; set; }
-
-        public static string DatabaseScriptsLocation { get; set; }
-
-        protected static DbConnection CreateConnection()
+        private static readonly Dictionary<Type, string> TypeMapping = new Dictionary<Type, string>
         {
-            switch (DbProvider)
-            {
-                case DbProviderType.SQLite:
-                    return new SqliteConnection(ConnectionString);
+            { typeof(short), "SMALLINT" },
+            { typeof(int), "INT" },
+            { typeof(long), "BIGINT" },
+            { typeof(byte), "TINYINT" },
+            { typeof(decimal), "DECIMAL" },
+            { typeof(double), "FLOAT" },
+            { typeof(float), "REAL" },
+            { typeof(bool), "BIT" }
+        };
 
-                case DbProviderType.SqlServer:
-                    return new SqlConnection(ConnectionString);
-
-                default:
-                    throw new NotSupportedException("Database provider not supported.");
-            }
-        }
-
-        public static void ExecuteWithoutTransaction(string scriptName, object param = null)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, commandTimeout: CommandTimeout);
-            }
-        }
-
-        public static void Execute(string scriptName, object param = null)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    try
-                    {
-                        _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, transaction, CommandTimeout);
-                        transaction.Commit();
-                    }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
-                    }
-                }
-            }
-        }
-
-        public static void Execute(params SqlParam[] parameters)
-        {
-            if (parameters == null || parameters.Length == 0)
-            {
-                return;
-            }
-
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    try
-                    {
-                        foreach (var parameter in parameters)
-                        {
-                            _ = connection.Execute(ResourceHelper.GetDbScript(parameter.ScriptName), parameter.Param, transaction, CommandTimeout);
-                        }
-                        transaction.Commit();
-                    }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
-                    }
-                }
-            }
-        }
-
-        public static string ExecuteScalarQuery(string query)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return connection.ExecuteScalar<string>(query, commandTimeout: CommandTimeout);
-            }
-        }
-
-        public static DataTable ExecuteQuery(string query, Dictionary<string, object> parameters = null)
-        {
-            if (!IsQuerySeemsSafe(query))
-            {
-                throw new ArgumentException("The SQL query contains potentially unsafe content.");
-            }
-
-            using (var connection = CreateConnection())
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = query;
-                command.CommandTimeout = CommandTimeout ?? 30;
-
-                if (parameters != null)
-                {
-                    foreach (var param in parameters)
-                    {
-                        var parameter = command.CreateParameter();
-                        parameter.ParameterName = param.Key;
-                        parameter.Value = param.Value ?? DBNull.Value;
-                        _ = command.Parameters.Add(parameter);
-                    }
-                }
-
-                var dataTable = new DataTable();
-                connection.Open();
-
-                using (var reader = command.ExecuteReader())
-                {
-                    dataTable.Load(reader);
-                }
-
-                return dataTable;
-            }
-        }
-
-        public static bool IsQuerySeemsSafe(string query)
-        {
-            if (String.IsNullOrWhiteSpace(query))
-            {
-                return false;
-            }
-
-            // Define dangerous keywords or patterns
-            var dangerousKeywords = new[]
-            {
-                "drop ", "delete ", "insert ", "update ", "--", ";", "/*", "*/", "xp_"
-            };
-
-            // Check if the query contains any of the dangerous patterns
-            foreach (var keyword in dangerousKeywords)
-            {
-                if (query.IndexOf(keyword, 0, query.Length, StringComparison.OrdinalIgnoreCase) != -1)
-                {
-                    return false;
-                }
-            }
-
-            // Optional: Check for balanced quotes (basic validation)
-            var singleQuotes = query.Count(c => c == '\'');
-            var doubleQuotes = query.Count(c => c == '"');
-            if (singleQuotes % 2 != 0 || doubleQuotes % 2 != 0)
-            {
-                return false; // Unbalanced quotes are suspicious
-            }
-
-            return true; // Query seems safe
-        }
-    }
-
-    public abstract class BaseRepository<TModelType> : BaseRepository
-    {
         static BaseRepository()
         {
             using (var connection = CreateConnection())
@@ -359,40 +209,33 @@ namespace Mtf.Database
             }
         }
 
-        public TModelType Get(long id)
+        public TModelType Select(long id)
         {
-            var queryName = $"Select{typeof(TModelType).Name}";
-            return QuerySingleOrDefault(queryName, id);
+            return QuerySingleOrDefault(SelectScriptName, id);
         }
 
-        public TModelType Get(int id)
+        public TModelType Select(int id)
         {
-            var queryName = $"Select{typeof(TModelType).Name}";
-            return QuerySingleOrDefault(queryName, id);
+            return QuerySingleOrDefault(SelectScriptName, id);
         }
 
-        public ReadOnlyCollection<TModelType> GetAll()
+        public ReadOnlyCollection<TModelType> SelectAll()
         {
-            var queryName = $"SelectAll{typeof(TModelType).Name}";
-            return Query(queryName);
+            return Query(SelectAllScriptName);
         }
 
-        public ReadOnlyCollection<TModelType> GetWhere(object param)
+        public ReadOnlyCollection<TModelType> SelectWhere(object param)
         {
-            var queryName = $"SelectAll{typeof(TModelType).Name}";
-            return Query(queryName, param);
+            return Query(SelectWhereScriptName, param);
         }
 
         public void Insert(TModelType model)
         {
-            var scriptName = $"Insert{typeof(TModelType).Name}";
-            Execute(scriptName, model);
+            Execute(InsertScriptName, model);
         }
 
-        public int InsertAndReturnId(TModelType model)
+        public T InsertAndReturnId<T>(TModelType model) where T : struct
         {
-            var scriptName = $"Insert{typeof(TModelType).Name}";
-
             using (var connection = CreateConnection())
             {
                 connection.Open();
@@ -400,7 +243,9 @@ namespace Mtf.Database
                 {
                     try
                     {
-                        var result = connection.ExecuteScalar<int>(ResourceHelper.GetDbScript(scriptName) + "; SELECT CAST(SCOPE_IDENTITY() AS INT);", model, transaction, CommandTimeout);
+                        var typeName = TypeMapping.ContainsKey(typeof(T)) ? TypeMapping[typeof(T)] : typeof(T).Name.ToUpperInvariant();
+                        var query = $"{ResourceHelper.GetDbScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
+                        var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
                         transaction.Commit();
                         return result;
                     }
@@ -415,26 +260,22 @@ namespace Mtf.Database
 
         public void Update(TModelType model)
         {
-            var scriptName = $"Update{typeof(TModelType).Name}";
-            Execute(scriptName, model);
+            Execute(UpdateScriptName, model);
         }
 
         public void Delete(long id)
         {
-            var scriptName = $"Delete{typeof(TModelType).Name}";
-            Execute(scriptName, new { Id = id });
+            Execute(DeleteScriptName, new { Id = id });
         }
 
         public void Delete(int id)
         {
-            var scriptName = $"Delete{typeof(TModelType).Name}";
-            Execute(scriptName, new { Id = id });
+            Execute(DeleteScriptName, new { Id = id });
         }
 
         public void DeleteWhere(object param)
         {
-            var scriptName = $"Delete{typeof(TModelType).Name}";
-            Execute(scriptName, param);
+            Execute(DeleteWhereScriptName, param);
         }
     }
 }
