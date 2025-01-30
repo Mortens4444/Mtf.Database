@@ -110,7 +110,7 @@ namespace Mtf.Database
             }
         }
 
-        protected TResultType ExecuteScalar<TResultType>(string scriptName, object param)
+        protected TResultType ExecuteScalar<TResultType>(string scriptName, object param = null)
         {
             using (var connection = CreateConnection())
             {

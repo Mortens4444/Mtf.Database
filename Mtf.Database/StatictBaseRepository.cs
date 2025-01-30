@@ -154,13 +154,11 @@ namespace Mtf.Database
                 return false;
             }
 
-            // Define dangerous keywords or patterns
             var dangerousKeywords = new[]
             {
                 "drop ", "delete ", "insert ", "update ", "--", ";", "/*", "*/", "xp_"
             };
 
-            // Check if the query contains any of the dangerous patterns
             foreach (var keyword in dangerousKeywords)
             {
                 if (query.IndexOf(keyword, 0, query.Length, StringComparison.OrdinalIgnoreCase) != -1)
@@ -169,15 +167,14 @@ namespace Mtf.Database
                 }
             }
 
-            // Optional: Check for balanced quotes (basic validation)
             var singleQuotes = query.Count(c => c == '\'');
             var doubleQuotes = query.Count(c => c == '"');
             if (singleQuotes % 2 != 0 || doubleQuotes % 2 != 0)
             {
-                return false; // Unbalanced quotes are suspicious
+                return false;
             }
 
-            return true; // Query seems safe
+            return true;
         }
 
         public static int GetDatabaseUsagePercentageWithLimit()
