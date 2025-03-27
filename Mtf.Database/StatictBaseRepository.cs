@@ -1,10 +1,14 @@
 ﻿using Dapper;
+using System;
+#if NET452
+using System.Data.SqlClient;
+#else
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
+#endif
 using Mtf.Database.Enums;
 using Mtf.Database.Models;
 using Mtf.Database.Services;
-using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -32,8 +36,10 @@ namespace Mtf.Database
         {
             switch (DbProvider)
             {
+#if !NET452
                 case DbProviderType.SQLite:
                     return new SqliteConnection(ConnectionString);
+#endif
 
                 case DbProviderType.SqlServer:
                     return new SqlConnection(ConnectionString);

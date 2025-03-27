@@ -1,5 +1,4 @@
 ﻿using Dapper;
-using Microsoft.Data.Sqlite;
 using Mtf.Database.Interfaces;
 using Mtf.Database.Services;
 using System;

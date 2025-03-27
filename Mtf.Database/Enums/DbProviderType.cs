@@ -2,7 +2,9 @@
 {
     public enum DbProviderType
     {
+#if !NET452
         SQLite,
+#endif
         SqlServer
     }
 }
