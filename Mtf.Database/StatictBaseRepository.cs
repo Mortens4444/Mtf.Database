@@ -55,7 +55,7 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, commandTimeout: CommandTimeout);
+                _ = connection.Execute(ScriptCache.GetScript(scriptName), param, commandTimeout: CommandTimeout);
             }
         }
 
@@ -71,7 +71,7 @@ namespace Mtf.Database
                     try
                     {
                         lastScript = scriptName;
-                        var sql = ResourceHelper.GetDbScript(scriptName);
+                        var sql = ScriptCache.GetScript(scriptName);
                         _ = connection.Execute(sql, param, transaction, CommandTimeout);
                         transaction.Commit();
                     }
@@ -103,7 +103,7 @@ namespace Mtf.Database
                         foreach (var parameter in parameters)
                         {
                             lastScript = parameter.ScriptName;
-                            var sql = ResourceHelper.GetDbScript(parameter.ScriptName);
+                            var sql = ScriptCache.GetScript(parameter.ScriptName);
                             _ = connection.Execute(sql, parameter.Param, transaction, CommandTimeout);
                         }
                         transaction.Commit();
@@ -136,7 +136,7 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = query;
+                command.CommandText = query ?? String.Empty;
                 command.CommandTimeout = CommandTimeout ?? 30;
 
                 if (parameters != null)

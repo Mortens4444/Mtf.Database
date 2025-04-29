@@ -47,7 +47,7 @@ namespace Mtf.Database
                         foreach (var script in ScriptsToExecute)
                         {
                             lastScript = script;
-                            var sql = ResourceHelper.GetDbScript(script);
+                            var sql = ScriptCache.GetScript(script);
                             _ = connection.Execute(sql, transaction: transaction, commandTimeout: CommandTimeout);
                         }
                         transaction.Commit();
@@ -126,7 +126,7 @@ namespace Mtf.Database
                     try
                     {
                         lastScript = scriptName;
-                        var sql = ResourceHelper.GetDbScript(scriptName);
+                        var sql = ScriptCache.GetScript(scriptName);
                         var result = connection.ExecuteScalar<TResultType>(sql, param, transaction, CommandTimeout);
                         transaction.Commit();
                         return result;
@@ -180,7 +180,7 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ResourceHelper.GetDbScript(scriptName)).ToList());
+                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName)).ToList());
             }
         }
 
@@ -189,7 +189,7 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ResourceHelper.GetDbScript(scriptName), param).ToList());
+                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
             }
         }
 
@@ -198,7 +198,7 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ResourceHelper.GetDbScript(scriptName), new { Id = id });
+                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
             }
         }
 
@@ -207,7 +207,7 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ResourceHelper.GetDbScript(scriptName), new { Id = id });
+                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
             }
         }
 
@@ -216,7 +216,16 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ResourceHelper.GetDbScript(scriptName), param);
+                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
+            }
+        }
+
+        protected dynamic QuerySingleOrDefaultWithDynamic(string scriptName, object param = null)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
             }
         }
 
@@ -258,7 +267,7 @@ namespace Mtf.Database
                     {
                         lastScript = InsertScriptName;
                         var typeName = TypeMapping.ContainsKey(typeof(T)) ? TypeMapping[typeof(T)] : typeof(T).Name.ToUpperInvariant();
-                        var query = $"{ResourceHelper.GetDbScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
+                        var query = $"{ScriptCache.GetScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
                         var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
                         transaction.Commit();
                         return result;
