@@ -15,6 +15,7 @@ using System.Data.Common;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using Mtf.Database.Exceptions;
 
 namespace Mtf.Database
 {
@@ -65,15 +66,19 @@ namespace Mtf.Database
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
+                    var lastScript = String.Empty;
+
                     try
                     {
-                        _ = connection.Execute(ResourceHelper.GetDbScript(scriptName), param, transaction, CommandTimeout);
+                        lastScript = scriptName;
+                        var sql = ResourceHelper.GetDbScript(scriptName);
+                        _ = connection.Execute(sql, param, transaction, CommandTimeout);
                         transaction.Commit();
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw;
+                        throw new SqlScriptExecutionException(lastScript, ex);
                     }
                 }
             }
@@ -91,18 +96,22 @@ namespace Mtf.Database
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
+                    var lastScript = String.Empty;
+
                     try
                     {
                         foreach (var parameter in parameters)
                         {
-                            _ = connection.Execute(ResourceHelper.GetDbScript(parameter.ScriptName), parameter.Param, transaction, CommandTimeout);
+                            lastScript = parameter.ScriptName;
+                            var sql = ResourceHelper.GetDbScript(parameter.ScriptName);
+                            _ = connection.Execute(sql, parameter.Param, transaction, CommandTimeout);
                         }
                         transaction.Commit();
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw;
+                        throw new SqlScriptExecutionException(lastScript, ex);
                     }
                 }
             }

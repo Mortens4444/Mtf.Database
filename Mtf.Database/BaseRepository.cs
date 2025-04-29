@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Mtf.Database.Exceptions;
 using Mtf.Database.Interfaces;
 using Mtf.Database.Services;
 using System;
@@ -39,18 +40,22 @@ namespace Mtf.Database
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
+                    var lastScript = String.Empty;
+
                     try
                     {
                         foreach (var script in ScriptsToExecute)
                         {
-                            _ = connection.Execute(ResourceHelper.GetDbScript(script), transaction: transaction, commandTimeout: CommandTimeout);
+                            lastScript = script;
+                            var sql = ResourceHelper.GetDbScript(script);
+                            _ = connection.Execute(sql, transaction: transaction, commandTimeout: CommandTimeout);
                         }
                         transaction.Commit();
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw;
+                        throw new SqlScriptExecutionException(lastScript, ex);
                     }
                 }
             }
@@ -116,16 +121,20 @@ namespace Mtf.Database
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
+                    var lastScript = String.Empty;
+
                     try
                     {
-                        var result = connection.ExecuteScalar<TResultType>(ResourceHelper.GetDbScript(scriptName), param, transaction, CommandTimeout);
+                        lastScript = scriptName;
+                        var sql = ResourceHelper.GetDbScript(scriptName);
+                        var result = connection.ExecuteScalar<TResultType>(sql, param, transaction, CommandTimeout);
                         transaction.Commit();
                         return result;
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw;
+                        throw new SqlScriptExecutionException(lastScript, ex);
                     }
                 }
             }
@@ -149,15 +158,18 @@ namespace Mtf.Database
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
+                    var lastScript = String.Empty;
+
                     try
                     {
+                        lastScript = procedureName;
                         _ = connection.Execute(procedureName, param, transaction, CommandTimeout, CommandType.StoredProcedure);
                         transaction.Commit();
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw;
+                        throw new SqlScriptExecutionException(lastScript, ex);
                     }
                 }
             }
@@ -199,7 +211,7 @@ namespace Mtf.Database
             }
         }
 
-        protected TModelType QuerySingleOrDefault(string scriptName, object param)
+        protected TModelType QuerySingleOrDefault(string scriptName, object param = null)
         {
             using (var connection = CreateConnection())
             {
@@ -240,18 +252,21 @@ namespace Mtf.Database
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
+                    var lastScript = String.Empty;
+
                     try
                     {
+                        lastScript = InsertScriptName;
                         var typeName = TypeMapping.ContainsKey(typeof(T)) ? TypeMapping[typeof(T)] : typeof(T).Name.ToUpperInvariant();
                         var query = $"{ResourceHelper.GetDbScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
                         var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
                         transaction.Commit();
                         return result;
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw;
+                        throw new SqlScriptExecutionException(lastScript, ex);
                     }
                 }
             }
