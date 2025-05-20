@@ -2,12 +2,11 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
     <id>Mtf.Database</id>
-    <version>2.0.39</version>
+    <version>2.0.40</version>
     <description>
       Database connections (SqlClient, SQLite).
 
       Compatibility:
-      - .NET Framework 4.5.2
       - .NET Framework 4.6.2
       - .NetStandard 2.0
 	</description>
@@ -25,15 +24,15 @@
 	  </group>
       <group targetFramework="net462">
         <dependency id="Dapper" version="2.1.66" />
-        <dependency id="Microsoft.Data.SqlClient" version="5.2.2" />
-        <dependency id="Microsoft.Data.SQLite" version="9.0.4" />
-        <dependency id="Microsoft.Data.SQLite.Core" version="9.0.4" />
+        <dependency id="Microsoft.Data.SqlClient" version="6.0.2" />
+        <dependency id="Microsoft.Data.SQLite" version="9.0.5" />
+        <dependency id="Microsoft.Data.SQLite.Core" version="9.0.5" />
 	  </group>
       <group targetFramework="netstandard2.0">
         <dependency id="Dapper" version="2.1.66" />
-        <dependency id="Microsoft.Data.SqlClient" version="5.2.2" />
-        <dependency id="Microsoft.Data.SQLite" version="9.0.4" />
-        <dependency id="Microsoft.Data.SQLite.Core" version="9.0.4" />
+        <dependency id="Microsoft.Data.SqlClient" version="6.0.2" />
+        <dependency id="Microsoft.Data.SQLite" version="9.0.5" />
+        <dependency id="Microsoft.Data.SQLite.Core" version="9.0.5" />
 	  </group>
     </dependencies>
   </metadata>
