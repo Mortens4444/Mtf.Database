@@ -11,50 +11,20 @@ using System.Linq;
 
 namespace Mtf.Database
 {
-    public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<TModelType>
+    public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRepository, IRepositoryWithCompositeKey<TModelType, TKey>
     {
-        private static readonly string SelectScriptName = $"{nameof(Select)}{typeof(TModelType).Name}";
+        //private static readonly string SelectScriptName = $"{nameof(Select)}{typeof(TModelType).Name}";
         private static readonly string SelectAllScriptName = $"{nameof(SelectAll)}{typeof(TModelType).Name}";
         private static readonly string SelectWhereScriptName = $"{nameof(SelectWhere)}{typeof(TModelType).Name}";
         private static readonly string InsertScriptName = $"{nameof(Insert)}{typeof(TModelType).Name}";
         private static readonly string UpdateScriptName = $"{nameof(Update)}{typeof(TModelType).Name}";
-        private static readonly string DeleteScriptName = $"{nameof(Delete)}{typeof(TModelType).Name}";
+        //private static readonly string DeleteScriptName = $"{nameof(Delete)}{typeof(TModelType).Name}";
         private static readonly string DeleteWhereScriptName = $"{nameof(DeleteWhere)}{typeof(TModelType).Name}";
-
-        static BaseRepository()
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    var lastScript = String.Empty;
-
-                    try
-                    {
-                        foreach (var script in ScriptsToExecute)
-                        {
-                            lastScript = script;
-                            var sql = ScriptCache.GetScript(script);
-                            _ = connection.Execute(sql, transaction: transaction, commandTimeout: CommandTimeout);
-                        }
-                        transaction.Commit();
-                    }
-                    catch (Exception ex)
-                    {
-                        transaction.Rollback();
-                        throw new SqlScriptExecutionException(lastScript, ex);
-                    }
-                }
-            }
-        }
 
         protected TModelType ExecuteInTransaction(Func<DbConnection, IDbTransaction, TModelType> operation)
         {
             if (operation == null)
-            {
                 throw new ArgumentNullException(nameof(operation));
-            }
 
             using (var connection = CreateConnection())
             {
@@ -79,9 +49,7 @@ namespace Mtf.Database
         protected void ExecuteInTransaction(Action<DbConnection, IDbTransaction> operation)
         {
             if (operation == null)
-            {
                 throw new ArgumentNullException(nameof(operation));
-            }
 
             using (var connection = CreateConnection())
             {
@@ -109,11 +77,8 @@ namespace Mtf.Database
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
-                    var lastScript = String.Empty;
-
                     try
                     {
-                        lastScript = scriptName;
                         var sql = ScriptCache.GetScript(scriptName);
                         var result = connection.ExecuteScalar<TResultType>(sql, param, transaction, CommandTimeout);
                         transaction.Commit();
@@ -122,7 +87,7 @@ namespace Mtf.Database
                     catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw new SqlScriptExecutionException(lastScript, ex);
+                        throw new SqlScriptExecutionException(scriptName, ex);
                     }
                 }
             }
@@ -134,8 +99,7 @@ namespace Mtf.Database
             {
                 connection.Open();
                 return new ReadOnlyCollection<TModelType>(
-                    connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList()
-                );
+                    connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList());
             }
         }
 
@@ -146,56 +110,28 @@ namespace Mtf.Database
                 connection.Open();
                 using (var transaction = connection.BeginTransaction())
                 {
-                    var lastScript = String.Empty;
-
                     try
                     {
-                        lastScript = procedureName;
                         _ = connection.Execute(procedureName, param, transaction, CommandTimeout, CommandType.StoredProcedure);
                         transaction.Commit();
                     }
                     catch (Exception ex)
                     {
                         transaction.Rollback();
-                        throw new SqlScriptExecutionException(lastScript, ex);
+                        throw new SqlScriptExecutionException(procedureName, ex);
                     }
                 }
             }
         }
 
-        protected ReadOnlyCollection<TModelType> Query(string scriptName)
+        protected ReadOnlyCollection<TModelType> Query(string scriptName, object param = null)
         {
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName)).ToList());
-            }
-        }
-
-        protected ReadOnlyCollection<TModelType> Query(string scriptName, object param)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
-            }
-        }
-
-        protected TModelType QuerySingleOrDefault(string scriptName, long id)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
-            }
-        }
-
-        protected TModelType QuerySingleOrDefault(string scriptName, int id)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
+                var sql = ScriptCache.GetScript(scriptName);
+                var result = connection.Query<TModelType>(sql, param).ToList();
+                return new ReadOnlyCollection<TModelType>(result);
             }
         }
 
@@ -204,7 +140,8 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
+                var sql = ScriptCache.GetScript(scriptName);
+                return connection.QuerySingleOrDefault<TModelType>(sql, param);
             }
         }
 
@@ -213,18 +150,9 @@ namespace Mtf.Database
             using (var connection = CreateConnection())
             {
                 connection.Open();
-                return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
+                var sql = ScriptCache.GetScript(scriptName);
+                return connection.QuerySingleOrDefault<dynamic>(sql, param);
             }
-        }
-
-        public TModelType Select(long id)
-        {
-            return QuerySingleOrDefault(SelectScriptName, id);
-        }
-
-        public TModelType Select(int id)
-        {
-            return QuerySingleOrDefault(SelectScriptName, id);
         }
 
         public ReadOnlyCollection<TModelType> SelectAll()
@@ -232,7 +160,7 @@ namespace Mtf.Database
             return Query(SelectAllScriptName);
         }
 
-        public ReadOnlyCollection<TModelType> SelectWhere(object param)
+        public IEnumerable<TModelType> SelectWhere(object param)
         {
             return Query(SelectWhereScriptName, param);
         }
@@ -242,51 +170,23 @@ namespace Mtf.Database
             Execute(InsertScriptName, model);
         }
 
-        public T InsertAndReturnId<T>(TModelType model) where T : struct
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    var lastScript = String.Empty;
-
-                    try
-                    {
-                        lastScript = InsertScriptName;
-                        var typeName = TypeMapping.Mappings.ContainsKey(typeof(T)) ? TypeMapping.Mappings[typeof(T)] : typeof(T).Name.ToUpperInvariant();
-                        var query = $"{ScriptCache.GetScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
-                        var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
-                        transaction.Commit();
-                        return result;
-                    }
-                    catch (Exception ex)
-                    {
-                        transaction.Rollback();
-                        throw new SqlScriptExecutionException(lastScript, ex);
-                    }
-                }
-            }
-        }
-
         public void Update(TModelType model)
         {
             Execute(UpdateScriptName, model);
         }
 
-        public void Delete(long id)
-        {
-            Execute(DeleteScriptName, new { Id = id });
-        }
-
-        public void Delete(int id)
-        {
-            Execute(DeleteScriptName, new { Id = id });
-        }
-
         public void DeleteWhere(object param)
         {
             Execute(DeleteWhereScriptName, param);
+        }
+
+        public abstract TModelType SelectByKey(TKey key);
+
+        public abstract void DeleteByKey(TKey key);
+
+        IEnumerable<TModelType> IRepositoryWithCompositeKey<TModelType, TKey>.SelectAll()
+        {
+            return SelectAll();
         }
     }
 }
