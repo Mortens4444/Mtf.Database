@@ -12,7 +12,7 @@ namespace Mtf.Database.Exceptions
         {
         }
 
-        public SqlScriptExecutionException(string scriptName, Exception innerException) : base($"Unable to excute script: {scriptName}", innerException)
+        public SqlScriptExecutionException(string scriptName, Exception innerException) : base($"Unable to execute script: {scriptName}", innerException)
         {
             ScriptName = scriptName;
         }
