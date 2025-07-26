@@ -160,7 +160,7 @@ namespace Mtf.Database
             return Query(SelectAllScriptName);
         }
 
-        public IEnumerable<TModelType> SelectWhere(object param)
+        public ReadOnlyCollection<TModelType> SelectWhere(object param)
         {
             return Query(SelectWhereScriptName, param);
         }
