@@ -9,12 +9,12 @@ namespace Mtf.Database.Services
     {
         public static string GetDbScript(string scriptName)
         {
-            return ReadEmbeddedResource(String.Concat(BaseRepository.DatabaseScriptsLocation, ".", scriptName, ".sql"), Encoding.UTF8);
+            return ReadEmbeddedResource(String.Concat(BaseRepository.DatabaseScriptsLocation ?? "Database.Scripts", ".", scriptName, ".sql"), Encoding.UTF8);
         }
 
         public static string ReadEmbeddedResource(string resourceName, Encoding encoding)
         {
-            var assembly = BaseRepository.DatabaseScriptsAssembly ?? Assembly.GetExecutingAssembly();
+            var assembly = BaseRepository.DatabaseScriptsAssembly ?? Assembly.GetEntryAssembly();
             return ReadEmbeddedResource(resourceName, assembly, encoding);
         }
 
