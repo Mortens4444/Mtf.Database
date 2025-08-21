@@ -14,7 +14,8 @@ namespace Mtf.Database.Services
 
         public static string ReadEmbeddedResource(string resourceName, Encoding encoding)
         {
-            return ReadEmbeddedResource(resourceName, BaseRepository.DatabaseScriptsAssembly, encoding);
+            var assembly = BaseRepository.DatabaseScriptsAssembly ?? Assembly.GetCallingAssembly();
+            return ReadEmbeddedResource(resourceName, assembly, encoding);
         }
 
         public static Stream GetEmbeddedResourceStream(string resourceName, Assembly assembly)
