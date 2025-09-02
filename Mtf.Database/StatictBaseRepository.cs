@@ -192,6 +192,33 @@ namespace Mtf.Database
             return true;
         }
 
+        public static bool HasValidSyntax(string scriptName)
+        {
+            var sql = ScriptCache.GetScript(scriptName);
+            return HasValidSqlSyntax(sql);
+        }
+
+        public static bool HasValidSqlSyntax(string sql)
+        {
+            using (var connection = CreateConnection())
+            {
+                connection.Open();
+                try
+                {
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = $"SET PARSEONLY ON; {sql}; SET PARSEONLY OFF;";
+                        command.ExecuteNonQuery();
+                    }
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
         public static int GetDatabaseUsagePercentageWithLimit()
         {
             var engineEdition = Convert.ToInt32(ExecuteScalarQuery("SELECT SERVERPROPERTY('EngineEdition')"), CultureInfo.InvariantCulture);
