@@ -3,7 +3,6 @@ using Mtf.Database.Exceptions;
 using Mtf.Database.Interfaces;
 using Mtf.Database.Services;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
