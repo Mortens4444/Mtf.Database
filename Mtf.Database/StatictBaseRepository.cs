@@ -207,47 +207,19 @@ namespace Mtf.Database
                 connection.Open();
                 try
                 {
-                    using (var command = connection.CreateCommand())
+                    var batches = Regex.Split(sql, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                    foreach (var batch in batches.Where(batch => !String.IsNullOrWhiteSpace(batch)))
                     {
-                        if(!checkDeclarations)
+                        using (var command = connection.CreateCommand())
                         {
-                            var usageRegex = new Regex(@"@[a-zA-Z_][a-zA-Z0-9_]*");
-                            var allUsedParameters = usageRegex.Matches(sql)
-                                                              .Cast<Match>()
-                                                              .Select(m => m.Value)
-                                                              .Distinct(StringComparer.OrdinalIgnoreCase);
-
-                            var declarationRegex = new Regex(@"DECLARE\s+(@[a-zA-Z_][a-zA-Z0-9_]*)", RegexOptions.IgnoreCase);
-                            var alreadyDeclaredParameters = declarationRegex.Matches(sql)
-                                                                             .Cast<Match>()
-                                                                             .Select(m => m.Groups[1].Value)
-                                                                             .Distinct(StringComparer.OrdinalIgnoreCase);
-
-                            var parametersToDeclare = allUsedParameters.Except(alreadyDeclaredParameters);
-
-                            var declarations = String.Join(" ", parametersToDeclare.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
-
-                            foreach (var p in parametersToDeclare)
-                            {
-                                var pattern = "IN " + p;
-                                if (sql.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
-                                {
-                                    sql = Regex.Replace(sql,
-                                                        $@"IN\s*{Regex.Escape(p)}",
-                                                        $"IN (SELECT value FROM STRING_SPLIT({p}, ','))",
-                                                        RegexOptions.IgnoreCase);
-                                }
-                            }
-
-                            command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}";
+                            CheckSyntax(batch, checkDeclarations, command);
                         }
-                        else
-                        {
-                            command.CommandText = $"SET PARSEONLY ON; {sql}";
-
-                        }
-                        command.ExecuteNonQuery();
                     }
+
+                    //using (var command = connection.CreateCommand())
+                    //{
+                    //    CheckSyntax(sql, checkDeclarations, command);
+                    //}
                     exception = null;
                     return true;
                 }
@@ -257,6 +229,48 @@ namespace Mtf.Database
                     return false;
                 }
             }
+        }
+
+        private static void CheckSyntax(string sql, bool checkDeclarations, DbCommand command)
+        {
+            if (!checkDeclarations)
+            {
+                var usageRegex = new Regex(@"@[a-zA-Z_][a-zA-Z0-9_]*");
+                var allUsedParameters = usageRegex.Matches(sql)
+                                                  .Cast<Match>()
+                                                  .Select(m => m.Value)
+                                                  .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                var declarationRegex = new Regex(@"DECLARE\s+(@[a-zA-Z_][a-zA-Z0-9_]*)", RegexOptions.IgnoreCase);
+                var alreadyDeclaredParameters = declarationRegex.Matches(sql)
+                                                                 .Cast<Match>()
+                                                                 .Select(m => m.Groups[1].Value)
+                                                                 .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                var parametersToDeclare = allUsedParameters.Except(alreadyDeclaredParameters);
+
+                var declarations = String.Join(" ", parametersToDeclare.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
+
+                foreach (var p in parametersToDeclare)
+                {
+                    var pattern = "IN " + p;
+                    if (sql.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        sql = Regex.Replace(sql,
+                                            $@"IN\s*{Regex.Escape(p)}",
+                                            $"IN (SELECT value FROM STRING_SPLIT({p}, ','))",
+                                            RegexOptions.IgnoreCase);
+                    }
+                }
+
+                command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}";
+            }
+            else
+            {
+                command.CommandText = $"SET PARSEONLY ON; {sql}";
+
+            }
+            command.ExecuteNonQuery();
         }
 
         public static int GetDatabaseUsagePercentageWithLimit()
