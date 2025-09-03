@@ -4,7 +4,8 @@ BaseRepository.ConnectionString = @"Data Source=localhost\SQLEXPRESS;Initial Cat
 Console.WriteLine(BaseRepository.ExecuteScalarQuery("SELECT HOST_NAME()"));
 Console.WriteLine(BaseRepository.ExecuteScalarQuery("SELECT SUSER_NAME()"));
 
-if (!BaseRepository.HasValidSqlSyntax("SELECT 1"))
+BaseRepository.ConnectionString = @"Data Source=localhost\SQLEXPRESS;Initial Catalog=LiveView;Integrated Security=True;";
+if (!BaseRepository.HasValidSqlSyntax("DELETE FROM Permissions WHERE GroupId = @GroupId;"))
 {
     throw new Exception("Invalid SQL syntax");
 }

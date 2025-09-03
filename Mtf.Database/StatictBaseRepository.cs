@@ -16,6 +16,7 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Mtf.Database.Exceptions;
+using System.Text.RegularExpressions;
 
 namespace Mtf.Database
 {
@@ -207,7 +208,15 @@ namespace Mtf.Database
                 {
                     using (var command = connection.CreateCommand())
                     {
-                        command.CommandText = $"SET PARSEONLY ON; {sql}; SET PARSEONLY OFF;";
+                        var regex = new Regex(@"@[a-zA-Z_][a-zA-Z0-9_]*");
+                        var parameters = regex.Matches(sql)
+                                              .Cast<Match>()
+                                              .Select(m => m.Value)
+                                              .Distinct();
+
+                        var declarations = String.Join(" ", parameters.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
+
+                        command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}; SET PARSEONLY OFF;";
                         command.ExecuteNonQuery();
                     }
                     return true;
