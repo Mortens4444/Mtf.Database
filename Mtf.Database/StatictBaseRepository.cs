@@ -224,7 +224,7 @@ namespace Mtf.Database
 
                         var declarations = string.Join(" ", parametersToDeclare.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
 
-                        command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}; SET PARSEONLY OFF;";
+                        command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}";
                         command.ExecuteNonQuery();
                     }
                     exception = null;
