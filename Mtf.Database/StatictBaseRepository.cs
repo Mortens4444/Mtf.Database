@@ -17,6 +17,7 @@ using System.Linq;
 using System.Reflection;
 using Mtf.Database.Exceptions;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace Mtf.Database
 {
@@ -193,13 +194,13 @@ namespace Mtf.Database
             return true;
         }
 
-        public static bool HasValidSyntax(string scriptName, out Exception exception)
+        public static bool HasValidSyntax(string scriptName, bool checkDeclarations, out Exception exception)
         {
             var sql = ScriptCache.GetScript(scriptName);
-            return HasValidSqlSyntax(sql, out exception);
+            return HasValidSqlSyntax(sql, checkDeclarations, out exception);
         }
 
-        public static bool HasValidSqlSyntax(string sql, out Exception exception)
+        public static bool HasValidSqlSyntax(string sql, bool checkDeclarations, out Exception exception)
         {
             using (var connection = CreateConnection())
             {
@@ -208,23 +209,43 @@ namespace Mtf.Database
                 {
                     using (var command = connection.CreateCommand())
                     {
-                        var usageRegex = new Regex(@"@[a-zA-Z_][a-zA-Z0-9_]*");
-                        var allUsedParameters = usageRegex.Matches(sql)
-                                                          .Cast<Match>()
-                                                          .Select(m => m.Value)
-                                                          .Distinct(StringComparer.OrdinalIgnoreCase);
+                        if(!checkDeclarations)
+                        {
+                            var usageRegex = new Regex(@"@[a-zA-Z_][a-zA-Z0-9_]*");
+                            var allUsedParameters = usageRegex.Matches(sql)
+                                                              .Cast<Match>()
+                                                              .Select(m => m.Value)
+                                                              .Distinct(StringComparer.OrdinalIgnoreCase);
 
-                        var declarationRegex = new Regex(@"DECLARE\s+(@[a-zA-Z_][a-zA-Z0-9_]*)", RegexOptions.IgnoreCase);
-                        var alreadyDeclaredParameters = declarationRegex.Matches(sql)
-                                                                         .Cast<Match>()
-                                                                         .Select(m => m.Groups[1].Value)
-                                                                         .Distinct(StringComparer.OrdinalIgnoreCase);
+                            var declarationRegex = new Regex(@"DECLARE\s+(@[a-zA-Z_][a-zA-Z0-9_]*)", RegexOptions.IgnoreCase);
+                            var alreadyDeclaredParameters = declarationRegex.Matches(sql)
+                                                                             .Cast<Match>()
+                                                                             .Select(m => m.Groups[1].Value)
+                                                                             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-                        var parametersToDeclare = allUsedParameters.Except(alreadyDeclaredParameters);
+                            var parametersToDeclare = allUsedParameters.Except(alreadyDeclaredParameters);
 
-                        var declarations = string.Join(" ", parametersToDeclare.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
+                            var declarations = String.Join(" ", parametersToDeclare.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
 
-                        command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}";
+                            foreach (var p in parametersToDeclare)
+                            {
+                                var pattern = "IN " + p;
+                                if (sql.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
+                                {
+                                    sql = Regex.Replace(sql,
+                                                        $@"IN\s*{Regex.Escape(p)}",
+                                                        $"IN (SELECT value FROM STRING_SPLIT({p}, ','))",
+                                                        RegexOptions.IgnoreCase);
+                                }
+                            }
+
+                            command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}";
+                        }
+                        else
+                        {
+                            command.CommandText = $"SET PARSEONLY ON; {sql}";
+
+                        }
                         command.ExecuteNonQuery();
                     }
                     exception = null;
