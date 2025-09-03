@@ -208,13 +208,21 @@ namespace Mtf.Database
                 {
                     using (var command = connection.CreateCommand())
                     {
-                        var regex = new Regex(@"@[a-zA-Z_][a-zA-Z0-9_]*");
-                        var parameters = regex.Matches(sql)
-                                              .Cast<Match>()
-                                              .Select(m => m.Value)
-                                              .Distinct();
+                        var usageRegex = new Regex(@"@[a-zA-Z_][a-zA-Z0-9_]*");
+                        var allUsedParameters = usageRegex.Matches(sql)
+                                                          .Cast<Match>()
+                                                          .Select(m => m.Value)
+                                                          .Distinct(StringComparer.OrdinalIgnoreCase);
 
-                        var declarations = String.Join(" ", parameters.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
+                        var declarationRegex = new Regex(@"DECLARE\s+(@[a-zA-Z_][a-zA-Z0-9_]*)", RegexOptions.IgnoreCase);
+                        var alreadyDeclaredParameters = declarationRegex.Matches(sql)
+                                                                         .Cast<Match>()
+                                                                         .Select(m => m.Groups[1].Value)
+                                                                         .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                        var parametersToDeclare = allUsedParameters.Except(alreadyDeclaredParameters);
+
+                        var declarations = string.Join(" ", parametersToDeclare.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
 
                         command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}; SET PARSEONLY OFF;";
                         command.ExecuteNonQuery();
