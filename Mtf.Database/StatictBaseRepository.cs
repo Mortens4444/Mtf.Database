@@ -215,11 +215,6 @@ namespace Mtf.Database
                             CheckSyntax(batch, checkDeclarations, command);
                         }
                     }
-
-                    //using (var command = connection.CreateCommand())
-                    //{
-                    //    CheckSyntax(sql, checkDeclarations, command);
-                    //}
                     exception = null;
                     return true;
                 }
@@ -233,7 +228,9 @@ namespace Mtf.Database
 
         private static void CheckSyntax(string sql, bool checkDeclarations, DbCommand command)
         {
-            if (!checkDeclarations)
+            var isProcDefinition = Regex.IsMatch(sql, @"^\s*(CREATE|ALTER)\s+PROC(EDURE)?", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+
+            if (!checkDeclarations && !isProcDefinition)
             {
                 var usageRegex = new Regex(@"@[a-zA-Z_][a-zA-Z0-9_]*");
                 var allUsedParameters = usageRegex.Matches(sql)
@@ -256,10 +253,7 @@ namespace Mtf.Database
                     var pattern = "IN " + p;
                     if (sql.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        sql = Regex.Replace(sql,
-                                            $@"IN\s*{Regex.Escape(p)}",
-                                            $"IN (SELECT value FROM STRING_SPLIT({p}, ','))",
-                                            RegexOptions.IgnoreCase);
+                        sql = Regex.Replace(sql, $@"IN\s*{Regex.Escape(p)}", $"IN (SELECT value FROM STRING_SPLIT({p}, ','))", RegexOptions.IgnoreCase);
                     }
                 }
 
@@ -268,8 +262,8 @@ namespace Mtf.Database
             else
             {
                 command.CommandText = $"SET PARSEONLY ON; {sql}";
-
             }
+
             command.ExecuteNonQuery();
         }
 
