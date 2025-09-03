@@ -193,13 +193,13 @@ namespace Mtf.Database
             return true;
         }
 
-        public static bool HasValidSyntax(string scriptName)
+        public static bool HasValidSyntax(string scriptName, out Exception exception)
         {
             var sql = ScriptCache.GetScript(scriptName);
-            return HasValidSqlSyntax(sql);
+            return HasValidSqlSyntax(sql, out exception);
         }
 
-        public static bool HasValidSqlSyntax(string sql)
+        public static bool HasValidSqlSyntax(string sql, out Exception exception)
         {
             using (var connection = CreateConnection())
             {
@@ -219,10 +219,12 @@ namespace Mtf.Database
                         command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}; SET PARSEONLY OFF;";
                         command.ExecuteNonQuery();
                     }
+                    exception = null;
                     return true;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    exception = ex;
                     return false;
                 }
             }
