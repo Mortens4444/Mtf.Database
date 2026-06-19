@@ -1,10 +1,7 @@
-﻿namespace Mtf.Database.Enums
+﻿namespace Mtf.Database.Enums;
+
+public enum DbProviderType
 {
-    public enum DbProviderType
-    {
-#if !NET452
-        SQLite,
-#endif
-        SqlServer
-    }
+    SQLite,
+    SqlServer
 }

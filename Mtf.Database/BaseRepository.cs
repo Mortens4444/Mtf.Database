@@ -8,284 +8,243 @@ using System.Data;
 using System.Data.Common;
 using System.Linq;
 
-namespace Mtf.Database
+namespace Mtf.Database;
+
+public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<TModelType>
 {
-    public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<TModelType>
+    private static readonly string SelectScriptName = $"{nameof(Select)}{typeof(TModelType).Name}";
+    private static readonly string SelectAllScriptName = $"{nameof(SelectAll)}{typeof(TModelType).Name}";
+    private static readonly string SelectWhereScriptName = $"{nameof(SelectWhere)}{typeof(TModelType).Name}";
+    private static readonly string InsertScriptName = $"{nameof(Insert)}{typeof(TModelType).Name}";
+    private static readonly string UpdateScriptName = $"{nameof(Update)}{typeof(TModelType).Name}";
+    private static readonly string DeleteScriptName = $"{nameof(Delete)}{typeof(TModelType).Name}";
+    private static readonly string DeleteWhereScriptName = $"{nameof(DeleteWhere)}{typeof(TModelType).Name}";
+
+    static BaseRepository()
     {
-        private static readonly string SelectScriptName = $"{nameof(Select)}{typeof(TModelType).Name}";
-        private static readonly string SelectAllScriptName = $"{nameof(SelectAll)}{typeof(TModelType).Name}";
-        private static readonly string SelectWhereScriptName = $"{nameof(SelectWhere)}{typeof(TModelType).Name}";
-        private static readonly string InsertScriptName = $"{nameof(Insert)}{typeof(TModelType).Name}";
-        private static readonly string UpdateScriptName = $"{nameof(Update)}{typeof(TModelType).Name}";
-        private static readonly string DeleteScriptName = $"{nameof(Delete)}{typeof(TModelType).Name}";
-        private static readonly string DeleteWhereScriptName = $"{nameof(DeleteWhere)}{typeof(TModelType).Name}";
+        using var connection = CreateConnection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var lastScript = String.Empty;
 
-        static BaseRepository()
+        try
         {
-            using (var connection = CreateConnection())
+            foreach (var script in ScriptsToExecute)
             {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    var lastScript = String.Empty;
+                lastScript = script;
+                var sql = ScriptCache.GetScript(script);
+                _ = connection.Execute(sql, transaction: transaction, commandTimeout: CommandTimeout);
+            }
+            transaction.Commit();
+        }
+        catch (Exception ex)
+        {
+            transaction.Rollback();
+            throw new SqlScriptExecutionException(lastScript, ex);
+        }
+    }
 
-                    try
-                    {
-                        foreach (var script in ScriptsToExecute)
-                        {
-                            lastScript = script;
-                            var sql = ScriptCache.GetScript(script);
-                            _ = connection.Execute(sql, transaction: transaction, commandTimeout: CommandTimeout);
-                        }
-                        transaction.Commit();
-                    }
-                    catch (Exception ex)
-                    {
-                        transaction.Rollback();
-                        throw new SqlScriptExecutionException(lastScript, ex);
-                    }
+    protected TModelType ExecuteInTransaction(Func<DbConnection, IDbTransaction, TModelType> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        using (var connection = CreateConnection())
+        {
+            connection.Open();
+            using (var transaction = connection.BeginTransaction())
+            {
+                try
+                {
+                    var result = operation(connection, transaction);
+                    transaction.Commit();
+                    return result;
+                }
+                catch
+                {
+                    transaction.Rollback();
+                    throw;
                 }
             }
         }
+    }
 
-        protected TModelType ExecuteInTransaction(Func<DbConnection, IDbTransaction, TModelType> operation)
+    protected void ExecuteInTransaction(Action<DbConnection, IDbTransaction> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        using var connection = CreateConnection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        try
         {
-            if (operation == null)
-            {
-                throw new ArgumentNullException(nameof(operation));
-            }
-
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    try
-                    {
-                        var result = operation(connection, transaction);
-                        transaction.Commit();
-                        return result;
-                    }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
-                    }
-                }
-            }
+            operation(connection, transaction);
+            transaction.Commit();
         }
-
-        protected void ExecuteInTransaction(Action<DbConnection, IDbTransaction> operation)
+        catch
         {
-            if (operation == null)
-            {
-                throw new ArgumentNullException(nameof(operation));
-            }
-
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    try
-                    {
-                        operation(connection, transaction);
-                        transaction.Commit();
-                    }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
-                    }
-                }
-            }
+            transaction.Rollback();
+            throw;
         }
+    }
 
-        protected TResultType ExecuteScalar<TResultType>(string scriptName, object param = null)
+    protected TResultType ExecuteScalar<TResultType>(string scriptName, object param = null)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var lastScript = String.Empty;
+
+        try
         {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    var lastScript = String.Empty;
-
-                    try
-                    {
-                        lastScript = scriptName;
-                        var sql = ScriptCache.GetScript(scriptName);
-                        var result = connection.ExecuteScalar<TResultType>(sql, param, transaction, CommandTimeout);
-                        transaction.Commit();
-                        return result;
-                    }
-                    catch (Exception ex)
-                    {
-                        transaction.Rollback();
-                        throw new SqlScriptExecutionException(lastScript, ex);
-                    }
-                }
-            }
+            lastScript = scriptName;
+            var sql = ScriptCache.GetScript(scriptName);
+            var result = connection.ExecuteScalar<TResultType>(sql, param, transaction, CommandTimeout);
+            transaction.Commit();
+            return result;
         }
-
-        protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object param = null)
+        catch (Exception ex)
         {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return new ReadOnlyCollection<TModelType>(
-                    connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList()
-                );
-            }
+            transaction.Rollback();
+            throw new SqlScriptExecutionException(lastScript, ex);
         }
+    }
 
-        protected void ExecuteStoredProcedureNonQuery(string procedureName, object param = null)
+    protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object param = null)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        return new ReadOnlyCollection<TModelType>(
+            connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList()
+        );
+    }
+
+    protected void ExecuteStoredProcedureNonQuery(string procedureName, object param = null)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var lastScript = String.Empty;
+
+        try
         {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    var lastScript = String.Empty;
-
-                    try
-                    {
-                        lastScript = procedureName;
-                        _ = connection.Execute(procedureName, param, transaction, CommandTimeout, CommandType.StoredProcedure);
-                        transaction.Commit();
-                    }
-                    catch (Exception ex)
-                    {
-                        transaction.Rollback();
-                        throw new SqlScriptExecutionException(lastScript, ex);
-                    }
-                }
-            }
+            lastScript = procedureName;
+            _ = connection.Execute(procedureName, param, transaction, CommandTimeout, CommandType.StoredProcedure);
+            transaction.Commit();
         }
-
-        protected ReadOnlyCollection<TModelType> Query(string scriptName)
+        catch (Exception ex)
         {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName)).ToList());
-            }
+            transaction.Rollback();
+            throw new SqlScriptExecutionException(lastScript, ex);
         }
+    }
 
-        protected ReadOnlyCollection<TModelType> Query(string scriptName, object param)
+    protected ReadOnlyCollection<TModelType> Query(string scriptName)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName)).ToList());
+    }
+
+    protected ReadOnlyCollection<TModelType> Query(string scriptName, object param)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
+    }
+
+    protected TModelType QuerySingleOrDefault(string scriptName, long id)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
+    }
+
+    protected TModelType QuerySingleOrDefault(string scriptName, int id)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
+    }
+
+    protected TModelType QuerySingleOrDefault(string scriptName, object param = null)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
+    }
+
+    protected dynamic QuerySingleOrDefaultWithDynamic(string scriptName, object param = null)
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
+    }
+
+    public TModelType Select(long id)
+    {
+        return QuerySingleOrDefault(SelectScriptName, id);
+    }
+
+    public TModelType Select(int id)
+    {
+        return QuerySingleOrDefault(SelectScriptName, id);
+    }
+
+    public ReadOnlyCollection<TModelType> SelectAll()
+    {
+        return Query(SelectAllScriptName);
+    }
+
+    public ReadOnlyCollection<TModelType> SelectWhere(object param)
+    {
+        return Query(SelectWhereScriptName, param);
+    }
+
+    public void Insert(TModelType model)
+    {
+        Execute(InsertScriptName, model);
+    }
+
+    public T InsertAndReturnId<T>(TModelType model) where T : struct
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var lastScript = String.Empty;
+
+        try
         {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
-            }
+            lastScript = InsertScriptName;
+            var typeName = TypeMapping.Mappings.ContainsKey(typeof(T)) ? TypeMapping.Mappings[typeof(T)] : typeof(T).Name.ToUpperInvariant();
+            var query = $"{ScriptCache.GetScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
+            var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
+            transaction.Commit();
+            return result;
         }
-
-        protected TModelType QuerySingleOrDefault(string scriptName, long id)
+        catch (Exception ex)
         {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
-            }
+            transaction.Rollback();
+            throw new SqlScriptExecutionException(lastScript, ex);
         }
+    }
 
-        protected TModelType QuerySingleOrDefault(string scriptName, int id)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
-            }
-        }
+    public void Update(TModelType model)
+    {
+        Execute(UpdateScriptName, model);
+    }
 
-        protected TModelType QuerySingleOrDefault(string scriptName, object param = null)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
-            }
-        }
+    public void Delete(long id)
+    {
+        Execute(DeleteScriptName, new { Id = id });
+    }
 
-        protected dynamic QuerySingleOrDefaultWithDynamic(string scriptName, object param = null)
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
-            }
-        }
+    public void Delete(int id)
+    {
+        Execute(DeleteScriptName, new { Id = id });
+    }
 
-        public TModelType Select(long id)
-        {
-            return QuerySingleOrDefault(SelectScriptName, id);
-        }
-
-        public TModelType Select(int id)
-        {
-            return QuerySingleOrDefault(SelectScriptName, id);
-        }
-
-        public ReadOnlyCollection<TModelType> SelectAll()
-        {
-            return Query(SelectAllScriptName);
-        }
-
-        public ReadOnlyCollection<TModelType> SelectWhere(object param)
-        {
-            return Query(SelectWhereScriptName, param);
-        }
-
-        public void Insert(TModelType model)
-        {
-            Execute(InsertScriptName, model);
-        }
-
-        public T InsertAndReturnId<T>(TModelType model) where T : struct
-        {
-            using (var connection = CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    var lastScript = String.Empty;
-
-                    try
-                    {
-                        lastScript = InsertScriptName;
-                        var typeName = TypeMapping.Mappings.ContainsKey(typeof(T)) ? TypeMapping.Mappings[typeof(T)] : typeof(T).Name.ToUpperInvariant();
-                        var query = $"{ScriptCache.GetScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
-                        var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
-                        transaction.Commit();
-                        return result;
-                    }
-                    catch (Exception ex)
-                    {
-                        transaction.Rollback();
-                        throw new SqlScriptExecutionException(lastScript, ex);
-                    }
-                }
-            }
-        }
-
-        public void Update(TModelType model)
-        {
-            Execute(UpdateScriptName, model);
-        }
-
-        public void Delete(long id)
-        {
-            Execute(DeleteScriptName, new { Id = id });
-        }
-
-        public void Delete(int id)
-        {
-            Execute(DeleteScriptName, new { Id = id });
-        }
-
-        public void DeleteWhere(object param)
-        {
-            Execute(DeleteWhereScriptName, param);
-        }
+    public void DeleteWhere(object param)
+    {
+        Execute(DeleteWhereScriptName, param);
     }
 }

@@ -1,9 +1,8 @@
-﻿namespace Mtf.Database.Models
-{
-    public class SqlParam
-    {
-        public string ScriptName { get; set; }
+﻿namespace Mtf.Database.Models;
 
-        public object Param { get; set; }
-    }
+public class SqlParam
+{
+    public string ScriptName { get; set; }
+
+    public object Param { get; set; }
 }
