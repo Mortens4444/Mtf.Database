@@ -22,7 +22,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>3.0.1</Version>
+    <Version>3.0.2</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
@@ -47,8 +47,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.300" PrivateAssets="All" />
     <PackageReference Include="Dapper" Version="2.1.79" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <!--<PackageReference Include="Microsoft.Data.SqlClient.SNI" Version="5.1.0" />-->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.9" />
     <PackageReference Include="Mtf.Extensions" Version="1.0.31" />
