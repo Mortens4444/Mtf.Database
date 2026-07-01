@@ -12,13 +12,26 @@ namespace Mtf.Database;
 
 public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<TModelType>
 {
-    private static readonly string SelectScriptName = $"{nameof(Select)}{typeof(TModelType).Name}";
-    private static readonly string SelectAllScriptName = $"{nameof(SelectAll)}{typeof(TModelType).Name}";
-    private static readonly string SelectWhereScriptName = $"{nameof(SelectWhere)}{typeof(TModelType).Name}";
-    private static readonly string InsertScriptName = $"{nameof(Insert)}{typeof(TModelType).Name}";
-    private static readonly string UpdateScriptName = $"{nameof(Update)}{typeof(TModelType).Name}";
-    private static readonly string DeleteScriptName = $"{nameof(Delete)}{typeof(TModelType).Name}";
-    private static readonly string DeleteWhereScriptName = $"{nameof(DeleteWhere)}{typeof(TModelType).Name}";
+    public string ScriptsSubfolderName { get; } = typeof(TModelType).Name;
+
+    private readonly string SelectScriptName;
+    private readonly string SelectAllScriptName;
+    private readonly string SelectWhereScriptName;
+    private readonly string InsertScriptName;
+    private readonly string UpdateScriptName;
+    private readonly string DeleteScriptName;
+    private readonly string DeleteWhereScriptName;
+
+    protected BaseRepository()
+    {
+        SelectScriptName = $"{ScriptsSubfolderName}/{nameof(Select)}{typeof(TModelType).Name}";
+        SelectAllScriptName = $"{ScriptsSubfolderName}/{nameof(SelectAll)}{typeof(TModelType).Name}";
+        SelectWhereScriptName = $"{ScriptsSubfolderName}/{nameof(SelectWhere)}{typeof(TModelType).Name}";
+        InsertScriptName = $"{ScriptsSubfolderName}/{nameof(Insert)}{typeof(TModelType).Name}";
+        UpdateScriptName = $"{ScriptsSubfolderName}/{nameof(Update)}{typeof(TModelType).Name}";
+        DeleteScriptName = $"{ScriptsSubfolderName}/{nameof(Delete)}{typeof(TModelType).Name}";
+        DeleteWhereScriptName = $"{ScriptsSubfolderName}/{nameof(DeleteWhere)}{typeof(TModelType).Name}";
+    }
 
     static BaseRepository()
     {
@@ -48,23 +61,19 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        using (var connection = CreateConnection())
+        using var connection = CreateConnection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        try
         {
-            connection.Open();
-            using (var transaction = connection.BeginTransaction())
-            {
-                try
-                {
-                    var result = operation(connection, transaction);
-                    transaction.Commit();
-                    return result;
-                }
-                catch
-                {
-                    transaction.Rollback();
-                    throw;
-                }
-            }
+            var result = operation(connection, transaction);
+            transaction.Commit();
+            return result;
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
         }
     }
 
