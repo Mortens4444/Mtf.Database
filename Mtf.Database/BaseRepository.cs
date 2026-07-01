@@ -24,13 +24,13 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
 
     protected BaseRepository()
     {
-        SelectScriptName = $"{ScriptsSubfolderName}/{nameof(Select)}{typeof(TModelType).Name}";
-        SelectAllScriptName = $"{ScriptsSubfolderName}/{nameof(SelectAll)}{typeof(TModelType).Name}";
-        SelectWhereScriptName = $"{ScriptsSubfolderName}/{nameof(SelectWhere)}{typeof(TModelType).Name}";
-        InsertScriptName = $"{ScriptsSubfolderName}/{nameof(Insert)}{typeof(TModelType).Name}";
-        UpdateScriptName = $"{ScriptsSubfolderName}/{nameof(Update)}{typeof(TModelType).Name}";
-        DeleteScriptName = $"{ScriptsSubfolderName}/{nameof(Delete)}{typeof(TModelType).Name}";
-        DeleteWhereScriptName = $"{ScriptsSubfolderName}/{nameof(DeleteWhere)}{typeof(TModelType).Name}";
+        SelectScriptName = $"{ScriptsSubfolderName}.{nameof(Select)}{typeof(TModelType).Name}";
+        SelectAllScriptName = $"{ScriptsSubfolderName}.{nameof(SelectAll)}{typeof(TModelType).Name}";
+        SelectWhereScriptName = $"{ScriptsSubfolderName}.{nameof(SelectWhere)}{typeof(TModelType).Name}";
+        InsertScriptName = $"{ScriptsSubfolderName}.{nameof(Insert)}{typeof(TModelType).Name}";
+        UpdateScriptName = $"{ScriptsSubfolderName}.{nameof(Update)}{typeof(TModelType).Name}";
+        DeleteScriptName = $"{ScriptsSubfolderName}.{nameof(Delete)}{typeof(TModelType).Name}";
+        DeleteWhereScriptName = $"{ScriptsSubfolderName}.{nameof(DeleteWhere)}{typeof(TModelType).Name}";
     }
 
     static BaseRepository()
