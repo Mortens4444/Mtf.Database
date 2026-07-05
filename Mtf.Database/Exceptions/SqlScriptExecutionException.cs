@@ -14,7 +14,7 @@ public class SqlScriptExecutionException : Exception
     {
     }
 
-    public SqlScriptExecutionException(string? dbName, string scriptName, Exception innerException) : base($"Unable to execute script: {scriptName}", innerException)
+    public SqlScriptExecutionException(string? dbName, string scriptName, Exception innerException) : base($"Unable to execute script: {dbName} - {scriptName}", innerException)
     {
         DatabaseName = dbName;
         ScriptName = scriptName;
