@@ -23,8 +23,9 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     private readonly string DeleteWhereScriptName;
     private readonly string? connectionString;
 
-    protected BaseRepository()
+    protected BaseRepository(string? connectionString = null)
     {
+        this.connectionString = connectionString;
         SelectScriptName = $"{ScriptsSubfolderName}.{nameof(Select)}{typeof(TModelType).Name}";
         SelectAllScriptName = $"{ScriptsSubfolderName}.{nameof(SelectAll)}{typeof(TModelType).Name}";
         SelectWhereScriptName = $"{ScriptsSubfolderName}.{nameof(SelectWhere)}{typeof(TModelType).Name}";
@@ -34,14 +35,9 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         DeleteWhereScriptName = $"{ScriptsSubfolderName}.{nameof(DeleteWhere)}{typeof(TModelType).Name}";
     }
 
-    protected BaseRepository(string connectionString) : this()
-    {
-        this.connectionString = connectionString;
-    }
-
     static BaseRepository()
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(null);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;
@@ -67,7 +63,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         try
@@ -87,7 +83,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         try
@@ -104,7 +100,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
 
     protected TResultType? ExecuteScalar<TResultType>(string scriptName, object? param = null)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;
@@ -126,7 +122,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
 
     protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object? param = null)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         return new ReadOnlyCollection<TModelType>(
             connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList()
@@ -135,7 +131,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
 
     protected void ExecuteStoredProcedureNonQuery(string procedureName, object? param = null)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;
@@ -155,42 +151,42 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
 
     protected ReadOnlyCollection<TModelType> Query(string scriptName)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName)).ToList());
     }
 
     protected ReadOnlyCollection<TModelType> Query(string scriptName, object param)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
     }
 
     protected TModelType? QuerySingleOrDefault(string scriptName, long id)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
     }
 
     protected TModelType? QuerySingleOrDefault(string scriptName, int id)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
     }
 
     protected TModelType? QuerySingleOrDefault(string scriptName, object? param = null)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
     }
 
     protected dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
     }
@@ -222,7 +218,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
 
     public T InsertAndReturnId<T>(TModelType model) where T : struct
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;

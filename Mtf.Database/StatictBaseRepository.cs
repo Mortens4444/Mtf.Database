@@ -30,17 +30,7 @@ public abstract partial class BaseRepository
 
     public static string? DatabaseScriptsLocation { get; set; }
 
-    //protected static DbConnection CreateConnection()
-    //{
-    //    return DbProvider switch
-    //    {
-    //        DbProviderType.SQLite => new SqliteConnection(ConnectionString),
-    //        DbProviderType.SqlServer => new SqlConnection(ConnectionString),
-    //        _ => throw new NotSupportedException("Database provider not supported."),
-    //    };
-    //}
-
-    protected static DbConnection CreateConnection(string? connectionString = null)
+    protected static DbConnection CreateConnection(string? connectionString)
     {
         return DbProvider switch
         {
