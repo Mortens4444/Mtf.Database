@@ -75,7 +75,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(scriptName, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), scriptName, ex);
         }
     }
 
@@ -100,7 +100,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(procedureName, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), procedureName, ex);
         }
     }
 

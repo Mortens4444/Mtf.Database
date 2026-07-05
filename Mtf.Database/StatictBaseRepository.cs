@@ -66,7 +66,7 @@ public abstract partial class BaseRepository
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), lastScript, ex);
         }
     }
 
@@ -95,7 +95,7 @@ public abstract partial class BaseRepository
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), lastScript, ex);
         }
     }
 
