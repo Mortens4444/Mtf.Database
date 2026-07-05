@@ -60,7 +60,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         }
     }
 
-    protected TResultType ExecuteScalar<TResultType>(string scriptName, object param = null)
+    protected TResultType? ExecuteScalar<TResultType>(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -79,7 +79,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         }
     }
 
-    protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object param = null)
+    protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -87,7 +87,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
             connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList());
     }
 
-    protected void ExecuteStoredProcedureNonQuery(string procedureName, object param = null)
+    protected void ExecuteStoredProcedureNonQuery(string procedureName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -104,7 +104,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         }
     }
 
-    protected ReadOnlyCollection<TModelType> Query(string scriptName, object param = null)
+    protected ReadOnlyCollection<TModelType> Query(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -113,7 +113,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         return new ReadOnlyCollection<TModelType>(result);
     }
 
-    protected TModelType QuerySingleOrDefault(string scriptName, object param = null)
+    protected TModelType? QuerySingleOrDefault(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -121,7 +121,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         return connection.QuerySingleOrDefault<TModelType>(sql, param);
     }
 
-    protected dynamic QuerySingleOrDefaultWithDynamic(string scriptName, object param = null)
+    protected dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -133,11 +133,11 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
 
     public ReadOnlyCollection<TModelType> SelectWhere(object param) => Query(SelectWhereScriptName, param);
 
-    public void Insert(TModelType model) => Execute(InsertScriptName, model);
+    public void Insert(TModelType? model) => Execute(InsertScriptName, param: model);
 
-    public void Update(TModelType model) => Execute(UpdateScriptName, model);
+    public void Update(TModelType? model) => Execute(UpdateScriptName, param: model);
 
-    public void DeleteWhere(object param) => Execute(DeleteWhereScriptName, param);
+    public void DeleteWhere(object? param) => Execute(DeleteWhereScriptName, param: param);
 
     public abstract TModelType SelectByKey(TKey key);
 

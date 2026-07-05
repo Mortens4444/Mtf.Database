@@ -18,7 +18,7 @@ namespace Mtf.Database;
 
 public abstract partial class BaseRepository
 {
-    public static string ConnectionString { get; set; }
+    public static string? ConnectionString { get; set; }
 
     public static int? CommandTimeout { get; set; }
 
@@ -26,30 +26,40 @@ public abstract partial class BaseRepository
 
     public static List<string> ScriptsToExecute { get; } = new List<string>();
 
-    public static Assembly DatabaseScriptsAssembly { get; set; }
+    public static Assembly? DatabaseScriptsAssembly { get; set; }
 
-    public static string DatabaseScriptsLocation { get; set; }
+    public static string? DatabaseScriptsLocation { get; set; }
 
-    protected static DbConnection CreateConnection()
+    //protected static DbConnection CreateConnection()
+    //{
+    //    return DbProvider switch
+    //    {
+    //        DbProviderType.SQLite => new SqliteConnection(ConnectionString),
+    //        DbProviderType.SqlServer => new SqlConnection(ConnectionString),
+    //        _ => throw new NotSupportedException("Database provider not supported."),
+    //    };
+    //}
+
+    protected static DbConnection CreateConnection(string? connectionString = null)
     {
         return DbProvider switch
         {
-            DbProviderType.SQLite => new SqliteConnection(ConnectionString),
-            DbProviderType.SqlServer => new SqlConnection(ConnectionString),
+            DbProviderType.SQLite => new SqliteConnection(connectionString ?? ConnectionString),
+            DbProviderType.SqlServer => new SqlConnection(connectionString ?? ConnectionString),
             _ => throw new NotSupportedException("Database provider not supported."),
         };
     }
 
-    public static void ExecuteWithoutTransaction(string scriptName, object param = null)
+    public static void ExecuteWithoutTransaction(string scriptName, object? param = null, string? connectionString = null)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         _ = connection.Execute(ScriptCache.GetScript(scriptName), param, commandTimeout: CommandTimeout);
     }
 
-    public static void Execute(string scriptName, object param = null)
+    public static void Execute(string scriptName, string? connectionString = null, object? param = null)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;
@@ -68,14 +78,14 @@ public abstract partial class BaseRepository
         }
     }
 
-    public static void Execute(params SqlParam[] parameters)
+    public static void Execute(string? connectionString = null, params SqlParam[] parameters)
     {
         if (parameters == null || parameters.Length == 0)
         {
             return;
         }
 
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;
@@ -97,21 +107,21 @@ public abstract partial class BaseRepository
         }
     }
 
-    public static string ExecuteScalarQuery(string query)
+    public static string? ExecuteScalarQuery(string query, string? connectionString = null)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         return connection.ExecuteScalar<string>(query, commandTimeout: CommandTimeout);
     }
 
-    public static DataTable ExecuteQuery(string query, Dictionary<string, object> parameters = null)
+    public static DataTable ExecuteQuery(string query, Dictionary<string, object>? parameters = null, string? connectionString = null)
     {
         if (!IsQuerySeemsSafe(query))
         {
             throw new ArgumentException("The SQL query contains potentially unsafe content.");
         }
 
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         using var command = connection.CreateCommand();
         command.CommandText = query ?? String.Empty;
         command.CommandTimeout = CommandTimeout ?? 30;
@@ -168,15 +178,15 @@ public abstract partial class BaseRepository
         return true;
     }
 
-    public static bool HasValidSyntax(string scriptName, bool checkDeclarations, out Exception exception)
+    public static bool HasValidSyntax(string scriptName, bool checkDeclarations, string? connectionString, out Exception? exception)
     {
         var sql = ScriptCache.GetScript(scriptName);
-        return HasValidSqlSyntax(sql, checkDeclarations, out exception);
+        return HasValidSqlSyntax(sql, checkDeclarations, connectionString, out exception);
     }
 
-    public static bool HasValidSqlSyntax(string sql, bool checkDeclarations, out Exception exception)
+    public static bool HasValidSqlSyntax(string sql, bool checkDeclarations, string? connectionString, out Exception? exception)
     {
-        using var connection = CreateConnection();
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         try
         {
@@ -237,12 +247,12 @@ public abstract partial class BaseRepository
         command.ExecuteNonQuery();
     }
 
-    public static int GetDatabaseUsagePercentageWithLimit()
+    public static int GetDatabaseUsagePercentageWithLimit(string? connectionString = null)
     {
-        var engineEdition = Convert.ToInt32(ExecuteScalarQuery("SELECT SERVERPROPERTY('EngineEdition')"), CultureInfo.InvariantCulture);
+        var engineEdition = Convert.ToInt32(ExecuteScalarQuery("SELECT SERVERPROPERTY('EngineEdition')", connectionString), CultureInfo.InvariantCulture);
         var maxSizeInBytes = engineEdition == 4 ? 10L * 1024 * 1024 * 1024 : Int64.MaxValue;
 
-        using var result = ExecuteQuery("EXEC sp_spaceused");
+        using var result = ExecuteQuery("EXEC sp_spaceused", connectionString: connectionString);
         var firstRow = result.Rows[0];
         var databaseSize = ParseSize(firstRow["database_size"].ToString());
         var unallocatedSpace = ParseSize(firstRow["unallocated space"].ToString());
@@ -257,7 +267,7 @@ public abstract partial class BaseRepository
         return -1;
     }
 
-    private static double ParseSize(string size)
+    private static double ParseSize(string? size)
     {
         if (String.IsNullOrWhiteSpace(size))
         {

@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0</TargetFrameworks>
     <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>disable</Nullable>
+    <Nullable>enable</Nullable>
     <OutputType>Library</OutputType>
     <AnalysisLevel>latest-all</AnalysisLevel>
     <PackageReadmeFile>ReadMe.md</PackageReadmeFile>
@@ -22,7 +22,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>4.0.4</Version>
+    <Version>4.0.5</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
@@ -50,6 +50,6 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <!--<PackageReference Include="Microsoft.Data.SqlClient.SNI" Version="5.1.0" />-->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.9" />
-    <PackageReference Include="Mtf.Extensions" Version="1.0.31" />
+    <!--<PackageReference Include="Mtf.Extensions" Version="1.0.31" />-->
   </ItemGroup>
 </Project>

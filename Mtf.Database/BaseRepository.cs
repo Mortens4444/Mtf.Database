@@ -21,6 +21,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     private readonly string UpdateScriptName;
     private readonly string DeleteScriptName;
     private readonly string DeleteWhereScriptName;
+    private readonly string? connectionString;
 
     protected BaseRepository()
     {
@@ -31,6 +32,11 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         UpdateScriptName = $"{ScriptsSubfolderName}.{nameof(Update)}{typeof(TModelType).Name}";
         DeleteScriptName = $"{ScriptsSubfolderName}.{nameof(Delete)}{typeof(TModelType).Name}";
         DeleteWhereScriptName = $"{ScriptsSubfolderName}.{nameof(DeleteWhere)}{typeof(TModelType).Name}";
+    }
+
+    protected BaseRepository(string connectionString) : this()
+    {
+        this.connectionString = connectionString;
     }
 
     static BaseRepository()
@@ -96,7 +102,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
     }
 
-    protected TResultType ExecuteScalar<TResultType>(string scriptName, object param = null)
+    protected TResultType? ExecuteScalar<TResultType>(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -118,7 +124,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
     }
 
-    protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object param = null)
+    protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -127,7 +133,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         );
     }
 
-    protected void ExecuteStoredProcedureNonQuery(string procedureName, object param = null)
+    protected void ExecuteStoredProcedureNonQuery(string procedureName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -161,40 +167,40 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
     }
 
-    protected TModelType QuerySingleOrDefault(string scriptName, long id)
+    protected TModelType? QuerySingleOrDefault(string scriptName, long id)
     {
         using var connection = CreateConnection();
         connection.Open();
         return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
     }
 
-    protected TModelType QuerySingleOrDefault(string scriptName, int id)
+    protected TModelType? QuerySingleOrDefault(string scriptName, int id)
     {
         using var connection = CreateConnection();
         connection.Open();
         return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
     }
 
-    protected TModelType QuerySingleOrDefault(string scriptName, object param = null)
+    protected TModelType? QuerySingleOrDefault(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
         return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
     }
 
-    protected dynamic QuerySingleOrDefaultWithDynamic(string scriptName, object param = null)
+    protected dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
         return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
     }
 
-    public TModelType Select(long id)
+    public TModelType? Select(long id)
     {
         return QuerySingleOrDefault(SelectScriptName, id);
     }
 
-    public TModelType Select(int id)
+    public TModelType? Select(int id)
     {
         return QuerySingleOrDefault(SelectScriptName, id);
     }
@@ -209,9 +215,9 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         return Query(SelectWhereScriptName, param);
     }
 
-    public void Insert(TModelType model)
+    public void Insert(TModelType? model)
     {
-        Execute(InsertScriptName, model);
+        Execute(InsertScriptName, param: model);
     }
 
     public T InsertAndReturnId<T>(TModelType model) where T : struct
@@ -237,23 +243,23 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
     }
 
-    public void Update(TModelType model)
+    public void Update(TModelType? model)
     {
-        Execute(UpdateScriptName, model);
+        Execute(UpdateScriptName, param: model);
     }
 
     public void Delete(long id)
     {
-        Execute(DeleteScriptName, new { Id = id });
+        Execute(DeleteScriptName, param: new { Id = id });
     }
 
     public void Delete(int id)
     {
-        Execute(DeleteScriptName, new { Id = id });
+        Execute(DeleteScriptName, param: new { Id = id });
     }
 
-    public void DeleteWhere(object param)
+    public void DeleteWhere(object? param)
     {
-        Execute(DeleteWhereScriptName, param);
+        Execute(DeleteWhereScriptName, param: param);
     }
 }

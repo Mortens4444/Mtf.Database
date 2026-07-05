@@ -4,7 +4,7 @@ namespace Mtf.Database.Exceptions;
 
 public class SqlScriptExecutionException : Exception
 {
-    public String ScriptName { get; set; }
+    public string ScriptName { get; set; } = String.Empty;
 
     public SqlScriptExecutionException() { }
 

@@ -2,7 +2,7 @@
 
 public class SqlParam
 {
-    public string ScriptName { get; set; }
+    public required string ScriptName { get; set; }
 
-    public object Param { get; set; }
+    public object? Param { get; set; }
 }

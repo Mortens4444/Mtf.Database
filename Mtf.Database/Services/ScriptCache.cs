@@ -4,7 +4,7 @@ namespace Mtf.Database.Services;
 
 public static class ScriptCache
 {
-    private static readonly ConcurrentDictionary<string, string> cache = new ConcurrentDictionary<string, string>();
+    private static readonly ConcurrentDictionary<string, string> cache = new();
 
     public static string GetScript(string scriptName)
     {

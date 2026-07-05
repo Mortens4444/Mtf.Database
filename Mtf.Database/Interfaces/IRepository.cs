@@ -4,9 +4,9 @@ namespace Mtf.Database.Interfaces;
 
 public interface IRepository<TModelType>
 {
-    TModelType Select(long id);
+    TModelType? Select(long id);
 
-    TModelType Select(int id);
+    TModelType? Select(int id);
 
     ReadOnlyCollection<TModelType> SelectAll();
 
