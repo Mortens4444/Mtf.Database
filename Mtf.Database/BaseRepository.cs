@@ -16,7 +16,7 @@ using System.Text.RegularExpressions;
 
 namespace Mtf.Database;
 
-public abstract partial class BaseRepository(string connectionString)
+public partial class BaseRepository(string connectionString)
 {
     public string ConnectionString { get; init; } = connectionString;
 
