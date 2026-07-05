@@ -21,7 +21,6 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     private readonly string UpdateScriptName;
     private readonly string DeleteScriptName;
     private readonly string DeleteWhereScriptName;
-    private readonly string? connectionString;
 
     protected BaseRepository(string? connectionString = null)
     {

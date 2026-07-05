@@ -18,6 +18,8 @@ namespace Mtf.Database;
 
 public abstract partial class BaseRepository
 {
+    protected string? connectionString;
+
     public static string? ConnectionString { get; set; }
 
     public static int? CommandTimeout { get; set; }
