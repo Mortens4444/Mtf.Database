@@ -5,7 +5,7 @@ namespace Mtf.Database.Services;
 
 public static class Utils
 {
-    public static string? GetDatabaseName(string connectionString)
+    public static string? GetDatabaseName(string? connectionString)
     {
         if (String.IsNullOrWhiteSpace(connectionString))
         {

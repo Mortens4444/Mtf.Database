@@ -1,15 +1,16 @@
 ﻿using Mtf.Database;
+using Mtf.Database.Test;
 
-BaseRepository.ConnectionString = @"Data Source=localhost\SQLEXPRESS;Initial Catalog=master;Integrated Security=True;";
-Console.WriteLine(BaseRepository.ExecuteScalarQuery("SELECT HOST_NAME()"));
-Console.WriteLine(BaseRepository.ExecuteScalarQuery("SELECT SUSER_NAME()"));
+var masterRepository = new MasterRepository();
+Console.WriteLine(masterRepository.ExecuteScalarQuery("SELECT HOST_NAME()"));
+Console.WriteLine(masterRepository.ExecuteScalarQuery("SELECT SUSER_NAME()"));
 
-BaseRepository.ConnectionString = @"Data Source=localhost\SQLEXPRESS;Initial Catalog=LiveView;Integrated Security=True;";
-if (!BaseRepository.HasValidSqlSyntax("DELETE FROM Permissions WHERE GroupId = @GroupId;", false, null, out var ex))
+var logRepository = new LogRepository();
+if (!logRepository.HasValidSqlSyntax("DELETE FROM Permissions WHERE GroupId = @GroupId;", false, out var ex))
 {
     throw new Exception("Invalid SQL syntax");
 }
-if (!BaseRepository.HasValidSqlSyntax("DELETE FROM Agents WHERE VideoSourceId = @VideoSourceId;", false, null, out var ex2))
+if (!logRepository.HasValidSqlSyntax("DELETE FROM Agents WHERE VideoSourceId = @VideoSourceId;", false, out var ex2))
 {
     throw new Exception("Invalid SQL syntax");
 }

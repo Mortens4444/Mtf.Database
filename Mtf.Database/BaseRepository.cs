@@ -1,42 +1,38 @@
 ﻿using Dapper;
+using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
+using Mtf.Database.Enums;
 using Mtf.Database.Exceptions;
-using Mtf.Database.Interfaces;
+using Mtf.Database.Models;
 using Mtf.Database.Services;
 using System;
-using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using System.Linq;
+using System.Reflection;
+using System.Text.RegularExpressions;
 
 namespace Mtf.Database;
 
-public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<TModelType>
+public abstract partial class BaseRepository(string connectionString)
 {
-    public string ScriptsSubfolderName { get; } = typeof(TModelType).Name;
+    public string ConnectionString { get; init; } = connectionString;
 
-    private readonly string SelectScriptName;
-    private readonly string SelectAllScriptName;
-    private readonly string SelectWhereScriptName;
-    private readonly string InsertScriptName;
-    private readonly string UpdateScriptName;
-    private readonly string DeleteScriptName;
-    private readonly string DeleteWhereScriptName;
+    public static int? CommandTimeout { get; set; }
 
-    protected BaseRepository(string? connectionString = null)
+    public static DbProviderType DbProvider { get; set; } = DbProviderType.SqlServer;
+
+    public static List<string> ScriptsToExecute { get; } = new List<string>();
+
+    public static Assembly? DatabaseScriptsAssembly { get; set; }
+
+    public static string? DatabaseScriptsLocation { get; set; }
+
+    public static void ExecuteMigrations(string connectionString)
     {
-        this.connectionString = connectionString;
-        SelectScriptName = $"{ScriptsSubfolderName}.{nameof(Select)}{typeof(TModelType).Name}";
-        SelectAllScriptName = $"{ScriptsSubfolderName}.{nameof(SelectAll)}{typeof(TModelType).Name}";
-        SelectWhereScriptName = $"{ScriptsSubfolderName}.{nameof(SelectWhere)}{typeof(TModelType).Name}";
-        InsertScriptName = $"{ScriptsSubfolderName}.{nameof(Insert)}{typeof(TModelType).Name}";
-        UpdateScriptName = $"{ScriptsSubfolderName}.{nameof(Update)}{typeof(TModelType).Name}";
-        DeleteScriptName = $"{ScriptsSubfolderName}.{nameof(Delete)}{typeof(TModelType).Name}";
-        DeleteWhereScriptName = $"{ScriptsSubfolderName}.{nameof(DeleteWhere)}{typeof(TModelType).Name}";
-    }
-
-    static BaseRepository()
-    {
-        using var connection = CreateConnection(null);
+        using var connection = CreateConnection(connectionString);
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;
@@ -54,52 +50,35 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString), lastScript, ex);
         }
     }
 
-    protected TModelType ExecuteInTransaction(Func<DbConnection, IDbTransaction, TModelType> operation)
+    protected static DbConnection CreateConnection(string connectionString)
     {
-        ArgumentNullException.ThrowIfNull(operation);
+        return DbProvider switch
+        {
+            DbProviderType.SQLite => new SqliteConnection(connectionString),
+            DbProviderType.SqlServer => new SqlConnection(connectionString),
+            _ => throw new NotSupportedException("Database provider not supported."),
+        };
+    }
 
-        using var connection = CreateConnection(connectionString);
+    protected DbConnection CreateConnection()
+    {
+        return CreateConnection(ConnectionString);
+    }
+
+    public void ExecuteWithoutTransaction(string scriptName, object? param = null)
+    {
+        using var connection = CreateConnection();
         connection.Open();
-        using var transaction = connection.BeginTransaction();
-        try
-        {
-            var result = operation(connection, transaction);
-            transaction.Commit();
-            return result;
-        }
-        catch
-        {
-            transaction.Rollback();
-            throw;
-        }
+        _ = connection.Execute(ScriptCache.GetScript(scriptName), param, commandTimeout: CommandTimeout);
     }
 
-    protected void ExecuteInTransaction(Action<DbConnection, IDbTransaction> operation)
+    public void Execute(string scriptName, object? param = null)
     {
-        ArgumentNullException.ThrowIfNull(operation);
-
-        using var connection = CreateConnection(connectionString);
-        connection.Open();
-        using var transaction = connection.BeginTransaction();
-        try
-        {
-            operation(connection, transaction);
-            transaction.Commit();
-        }
-        catch
-        {
-            transaction.Rollback();
-            throw;
-        }
-    }
-
-    protected TResultType? ExecuteScalar<TResultType>(string scriptName, object? param = null)
-    {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;
@@ -108,153 +87,234 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         {
             lastScript = scriptName;
             var sql = ScriptCache.GetScript(scriptName);
-            var result = connection.ExecuteScalar<TResultType>(sql, param, transaction, CommandTimeout);
+            _ = connection.Execute(sql, param, transaction, CommandTimeout);
             transaction.Commit();
-            return result;
         }
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
         }
     }
 
-    protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object? param = null)
+    public void Execute(params SqlParam[] parameters)
     {
-        using var connection = CreateConnection(connectionString);
-        connection.Open();
-        return new ReadOnlyCollection<TModelType>(
-            connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList()
-        );
-    }
+        if (parameters == null || parameters.Length == 0)
+        {
+            return;
+        }
 
-    protected void ExecuteStoredProcedureNonQuery(string procedureName, object? param = null)
-    {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var lastScript = String.Empty;
 
         try
         {
-            lastScript = procedureName;
-            _ = connection.Execute(procedureName, param, transaction, CommandTimeout, CommandType.StoredProcedure);
+            foreach (var parameter in parameters)
+            {
+                lastScript = parameter.ScriptName;
+                var sql = ScriptCache.GetScript(parameter.ScriptName);
+                _ = connection.Execute(sql, parameter.Param, transaction, CommandTimeout);
+            }
             transaction.Commit();
         }
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
         }
     }
 
-    protected ReadOnlyCollection<TModelType> Query(string scriptName)
+    public string? ExecuteScalarQuery(string query)
     {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
-        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName)).ToList());
+        return connection.ExecuteScalar<string>(query, commandTimeout: CommandTimeout);
     }
 
-    protected ReadOnlyCollection<TModelType> Query(string scriptName, object param)
+    public DataTable ExecuteQuery(string query, Dictionary<string, object>? parameters = null)
     {
-        using var connection = CreateConnection(connectionString);
+        if (!IsQuerySeemsSafe(query))
+        {
+            throw new ArgumentException("The SQL query contains potentially unsafe content.");
+        }
+
+        using var connection = CreateConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = query ?? String.Empty;
+        command.CommandTimeout = CommandTimeout ?? 30;
+
+        if (parameters != null)
+        {
+            foreach (var param in parameters)
+            {
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = param.Key;
+                parameter.Value = param.Value ?? DBNull.Value;
+                _ = command.Parameters.Add(parameter);
+            }
+        }
+
+        var dataTable = new DataTable();
         connection.Open();
-        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
+
+        using (var reader = command.ExecuteReader())
+        {
+            dataTable.Load(reader);
+        }
+
+        return dataTable;
     }
 
-    protected TModelType? QuerySingleOrDefault(string scriptName, long id)
+    public static bool IsQuerySeemsSafe(string query)
     {
-        using var connection = CreateConnection(connectionString);
+        if (String.IsNullOrWhiteSpace(query))
+        {
+            return false;
+        }
+
+        var dangerousKeywords = new[]
+        {
+            "drop ", "delete ", "insert ", "update ", "--", ";", "/*", "*/", "xp_"
+        };
+
+        foreach (var keyword in dangerousKeywords)
+        {
+            if (query.IndexOf(keyword, 0, query.Length, StringComparison.OrdinalIgnoreCase) != -1)
+            {
+                return false;
+            }
+        }
+
+        var singleQuotes = query.Count(c => c == '\'');
+        var doubleQuotes = query.Count(c => c == '"');
+        if (singleQuotes % 2 != 0 || doubleQuotes % 2 != 0)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool HasValidSyntax(string scriptName, bool checkDeclarations, out Exception? exception)
+    {
+        var sql = ScriptCache.GetScript(scriptName);
+        return HasValidSqlSyntax(sql, checkDeclarations, out exception);
+    }
+
+    public bool HasValidSqlSyntax(string sql, bool checkDeclarations, out Exception? exception)
+    {
+        using var connection = CreateConnection();
         connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
-    }
-
-    protected TModelType? QuerySingleOrDefault(string scriptName, int id)
-    {
-        using var connection = CreateConnection(connectionString);
-        connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
-    }
-
-    protected TModelType? QuerySingleOrDefault(string scriptName, object? param = null)
-    {
-        using var connection = CreateConnection(connectionString);
-        connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
-    }
-
-    protected dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
-    {
-        using var connection = CreateConnection(connectionString);
-        connection.Open();
-        return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
-    }
-
-    public TModelType? Select(long id)
-    {
-        return QuerySingleOrDefault(SelectScriptName, id);
-    }
-
-    public TModelType? Select(int id)
-    {
-        return QuerySingleOrDefault(SelectScriptName, id);
-    }
-
-    public ReadOnlyCollection<TModelType> SelectAll()
-    {
-        return Query(SelectAllScriptName);
-    }
-
-    public ReadOnlyCollection<TModelType> SelectWhere(object param)
-    {
-        return Query(SelectWhereScriptName, param);
-    }
-
-    public void Insert(TModelType? model)
-    {
-        Execute(InsertScriptName, param: model);
-    }
-
-    public T InsertAndReturnId<T>(TModelType model) where T : struct
-    {
-        using var connection = CreateConnection(connectionString);
-        connection.Open();
-        using var transaction = connection.BeginTransaction();
-        var lastScript = String.Empty;
-
         try
         {
-            lastScript = InsertScriptName;
-            var typeName = TypeMapping.Mappings.ContainsKey(typeof(T)) ? TypeMapping.Mappings[typeof(T)] : typeof(T).Name.ToUpperInvariant();
-            var query = $"{ScriptCache.GetScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
-            var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
-            transaction.Commit();
-            return result;
+            var batches = BatchesRegex().Split(sql);
+            foreach (var batch in batches.Where(batch => !String.IsNullOrWhiteSpace(batch)))
+            {
+                using var command = connection.CreateCommand();
+                CheckSyntax(batch, checkDeclarations, command);
+            }
+            exception = null;
+            return true;
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), lastScript, ex);
+            exception = ex;
+            return false;
         }
     }
 
-    public void Update(TModelType? model)
+    private static void CheckSyntax(string sql, bool checkDeclarations, DbCommand command)
     {
-        Execute(UpdateScriptName, param: model);
+        var isProcDefinition = IsProcDefinition().IsMatch(sql);
+
+        if (!checkDeclarations && !isProcDefinition)
+        {
+            var usageRegex = IsIdentifier();
+            var allUsedParameters = usageRegex.Matches(sql)
+                                              .Cast<Match>()
+                                              .Select(m => m.Value)
+                                              .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            var declarationRegex = IsDeclaration();
+            var alreadyDeclaredParameters = declarationRegex.Matches(sql)
+                                                             .Cast<Match>()
+                                                             .Select(m => m.Groups[1].Value)
+                                                             .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            var parametersToDeclare = allUsedParameters.Except(alreadyDeclaredParameters);
+
+            var declarations = String.Join(" ", parametersToDeclare.Select(p => $"DECLARE {p} NVARCHAR(MAX);"));
+
+            foreach (var p in parametersToDeclare)
+            {
+                var pattern = "IN " + p;
+                if (sql.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                {
+                    sql = Regex.Replace(sql, $@"IN\s*{Regex.Escape(p)}", $"IN (SELECT value FROM STRING_SPLIT({p}, ','))", RegexOptions.IgnoreCase);
+                }
+            }
+
+            command.CommandText = $"SET PARSEONLY ON; {declarations} {sql}";
+        }
+        else
+        {
+            command.CommandText = $"SET PARSEONLY ON; {sql}";
+        }
+
+        command.ExecuteNonQuery();
     }
 
-    public void Delete(long id)
+    public int GetDatabaseUsagePercentageWithLimit()
     {
-        Execute(DeleteScriptName, param: new { Id = id });
+        var engineEdition = Convert.ToInt32(ExecuteScalarQuery("SELECT SERVERPROPERTY('EngineEdition')"), CultureInfo.InvariantCulture);
+        var maxSizeInBytes = engineEdition == 4 ? 10L * 1024 * 1024 * 1024 : Int64.MaxValue;
+
+        using var result = ExecuteQuery("EXEC sp_spaceused");
+        var firstRow = result.Rows[0];
+        var databaseSize = ParseSize(firstRow["database_size"].ToString());
+        var unallocatedSpace = ParseSize(firstRow["unallocated space"].ToString());
+
+        if (databaseSize > 0)
+        {
+            var usedSpace = databaseSize - unallocatedSpace;
+            var usagePercentage = (int)Math.Round(usedSpace / maxSizeInBytes * 100);
+            return usagePercentage;
+        }
+
+        return -1;
     }
 
-    public void Delete(int id)
+    private static double ParseSize(string? size)
     {
-        Execute(DeleteScriptName, param: new { Id = id });
+        if (String.IsNullOrWhiteSpace(size))
+        {
+            return 0;
+        }
+
+        var sizeValue = Double.Parse(size.AsSpan(0, size.Length - 3), CultureInfo.InvariantCulture);
+        var sizeUnit = size[^2..];
+
+        return sizeUnit switch
+        {
+            "KB" => sizeValue * 1024,
+            "MB" => sizeValue * 1024 * 1024,
+            "GB" => sizeValue * 1024 * 1024 * 1024,
+            "TB" => sizeValue * 1024 * 1024 * 1024 * 1024,
+            _ => sizeValue,
+        };
     }
 
-    public void DeleteWhere(object? param)
-    {
-        Execute(DeleteWhereScriptName, param: param);
-    }
+    [GeneratedRegex(@"^\s*GO\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline, "hu-HU")]
+    private static partial Regex BatchesRegex();
+    
+    [GeneratedRegex(@"^\s*(CREATE|ALTER)\s+PROC(EDURE)?", RegexOptions.IgnoreCase | RegexOptions.Multiline, "hu-HU")]
+    private static partial Regex IsProcDefinition();
+    
+    [GeneratedRegex(@"@[a-zA-Z_][a-zA-Z0-9_]*")]
+    private static partial Regex IsIdentifier();
+    
+    [GeneratedRegex(@"DECLARE\s+(@[a-zA-Z_][a-zA-Z0-9_]*)", RegexOptions.IgnoreCase, "hu-HU")]
+    private static partial Regex IsDeclaration();
 }

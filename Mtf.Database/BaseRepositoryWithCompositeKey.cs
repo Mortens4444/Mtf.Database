@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace Mtf.Database;
 
-public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRepository, IRepositoryWithCompositeKey<TModelType, TKey>
+public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey>(string connectionString) : BaseRepository(connectionString), IRepositoryWithCompositeKey<TModelType, TKey>
 {
     //private static readonly string SelectScriptName = $"{nameof(Select)}{typeof(TModelType).Name}";
     private static readonly string SelectAllScriptName = $"{nameof(SelectAll)}{typeof(TModelType).Name}";
@@ -25,7 +25,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
         try
@@ -45,7 +45,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
         try
@@ -62,7 +62,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
 
     protected TResultType? ExecuteScalar<TResultType>(string scriptName, object? param = null)
     {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
         try
@@ -75,13 +75,13 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), scriptName, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), scriptName, ex);
         }
     }
 
     protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object? param = null)
     {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         return new ReadOnlyCollection<TModelType>(
             connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList());
@@ -89,7 +89,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
 
     protected void ExecuteStoredProcedureNonQuery(string procedureName, object? param = null)
     {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
         try
@@ -100,13 +100,13 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
         catch (Exception ex)
         {
             transaction.Rollback();
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString ?? ConnectionString), procedureName, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), procedureName, ex);
         }
     }
 
     protected ReadOnlyCollection<TModelType> Query(string scriptName, object? param = null)
     {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         var sql = ScriptCache.GetScript(scriptName);
         var result = connection.Query<TModelType>(sql, param).ToList();
@@ -115,7 +115,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
 
     protected TModelType? QuerySingleOrDefault(string scriptName, object? param = null)
     {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         var sql = ScriptCache.GetScript(scriptName);
         return connection.QuerySingleOrDefault<TModelType>(sql, param);
@@ -123,7 +123,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey> : BaseRep
 
     protected dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
     {
-        using var connection = CreateConnection(connectionString);
+        using var connection = CreateConnection();
         connection.Open();
         var sql = ScriptCache.GetScript(scriptName);
         return connection.QuerySingleOrDefault<dynamic>(sql, param);
