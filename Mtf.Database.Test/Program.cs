@@ -1,7 +1,7 @@
 ﻿using Mtf.Database;
 using Mtf.Database.Test;
 
-var masterRepository = new MasterRepository();
+var masterRepository = new BaseRepository(@"Data Source=localhost\SQLEXPRESS;Initial Catalog=master;Integrated Security=True;");
 Console.WriteLine(masterRepository.ExecuteScalarQuery("SELECT HOST_NAME()"));
 Console.WriteLine(masterRepository.ExecuteScalarQuery("SELECT SUSER_NAME()"));
 
