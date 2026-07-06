@@ -6,9 +6,9 @@ public static class ScriptCache
 {
     private static readonly ConcurrentDictionary<string, string> cache = new();
 
-    public static string GetScript(string scriptName)
+    public static string GetScript(string scriptName, string? scriptsSubfolderName = null)
     {
-        return cache.GetOrAdd(scriptName, ResourceHelper.GetDbScript);
+        return cache.GetOrAdd(scriptName, key => ResourceHelper.GetDbScript(key, scriptsSubfolderName));
     }
 
     public static void Clear() => cache.Clear();

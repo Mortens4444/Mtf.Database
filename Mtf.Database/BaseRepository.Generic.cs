@@ -82,7 +82,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         try
         {
             lastScript = scriptName;
-            var sql = ScriptCache.GetScript(scriptName);
+            var sql = ScriptCache.GetScript(scriptName, ScriptsSubfolderName);
             var result = connection.ExecuteScalar<TResultType>(sql, param, transaction, CommandTimeout);
             transaction.Commit();
             return result;
@@ -127,42 +127,42 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     {
         using var connection = CreateConnection();
         connection.Open();
-        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName)).ToList());
+        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName, ScriptsSubfolderName)).ToList());
     }
 
     protected ReadOnlyCollection<TModelType> Query(string scriptName, object param)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
+        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName, ScriptsSubfolderName), param).ToList());
     }
 
     protected TModelType? QuerySingleOrDefault(string scriptName, long id)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
+        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName, ScriptsSubfolderName), new { Id = id });
     }
 
     protected TModelType? QuerySingleOrDefault(string scriptName, int id)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
+        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName, ScriptsSubfolderName), new { Id = id });
     }
 
     protected TModelType? QuerySingleOrDefault(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
+        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName, ScriptsSubfolderName), param);
     }
 
     protected dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
+        return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName, ScriptsSubfolderName), param);
     }
 
     public TModelType? Select(long id)
@@ -201,7 +201,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         {
             lastScript = InsertScriptName;
             var typeName = TypeMapping.Mappings.ContainsKey(typeof(T)) ? TypeMapping.Mappings[typeof(T)] : typeof(T).Name.ToUpperInvariant();
-            var query = $"{ScriptCache.GetScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
+            var query = $"{ScriptCache.GetScript(InsertScriptName, ScriptsSubfolderName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
             var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
             transaction.Commit();
             return result;
