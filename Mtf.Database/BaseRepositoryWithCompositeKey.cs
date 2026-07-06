@@ -36,7 +36,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey>(string co
         }
         catch
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw;
         }
     }
@@ -55,7 +55,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey>(string co
         }
         catch
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw;
         }
     }
@@ -74,7 +74,7 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey>(string co
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), scriptName, ex);
         }
     }
@@ -94,12 +94,12 @@ public abstract class BaseRepositoryWithCompositeKey<TModelType, TKey>(string co
         using var transaction = connection.BeginTransaction();
         try
         {
-            _ = connection.Execute(procedureName, param, transaction, CommandTimeout, CommandType.StoredProcedure);
+            ExecuteInternal(connection, procedureName, param, transaction, CommandType.StoredProcedure);
             transaction.Commit();
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), procedureName, ex);
         }
     }

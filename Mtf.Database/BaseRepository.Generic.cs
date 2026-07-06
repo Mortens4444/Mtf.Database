@@ -48,7 +48,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
         catch
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw;
         }
     }
@@ -67,7 +67,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
         catch
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw;
         }
     }
@@ -89,7 +89,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), lastScript, ex);
         }
     }
@@ -113,12 +113,12 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         try
         {
             lastScript = procedureName;
-            _ = connection.Execute(procedureName, param, transaction, CommandTimeout, CommandType.StoredProcedure);
+            ExecuteInternal(connection, procedureName, param, transaction, CommandType.StoredProcedure);
             transaction.Commit();
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), lastScript, ex);
         }
     }
@@ -208,7 +208,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), lastScript, ex);
         }
     }

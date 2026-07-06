@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
+using Mtf.Database.Attributes;
 using Mtf.Database.Enums;
 using Mtf.Database.Exceptions;
 using Mtf.Database.Models;
@@ -43,13 +44,13 @@ public partial class BaseRepository(string connectionString)
             {
                 lastScript = script;
                 var sql = ScriptCache.GetScript(script);
-                _ = connection.Execute(sql, transaction: transaction, commandTimeout: CommandTimeout);
+                ExecuteInternal(connection, sql, null, transaction);
             }
             transaction.Commit();
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(connectionString), lastScript, ex);
         }
     }
@@ -73,7 +74,7 @@ public partial class BaseRepository(string connectionString)
     {
         using var connection = CreateConnection();
         connection.Open();
-        _ = connection.Execute(ScriptCache.GetScript(scriptName), param, commandTimeout: CommandTimeout);
+        ExecuteInternal(connection, ScriptCache.GetScript(scriptName), param);
     }
 
     public void Execute(string scriptName, object? param = null)
@@ -87,12 +88,12 @@ public partial class BaseRepository(string connectionString)
         {
             lastScript = scriptName;
             var sql = ScriptCache.GetScript(scriptName);
-            _ = connection.Execute(sql, param, transaction, CommandTimeout);
+            ExecuteInternal(connection, sql, param, transaction);
             transaction.Commit();
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
         }
     }
@@ -113,15 +114,18 @@ public partial class BaseRepository(string connectionString)
         {
             foreach (var parameter in parameters)
             {
-                lastScript = parameter.ScriptName;
-                var sql = ScriptCache.GetScript(parameter.ScriptName);
-                _ = connection.Execute(sql, parameter.Param, transaction, CommandTimeout);
+                if (parameter != null)
+                {
+                    lastScript = parameter.ScriptName;
+                    var sql = ScriptCache.GetScript(parameter.ScriptName);
+                    ExecuteInternal(connection, sql, parameter.Param, transaction);
+                }
             }
             transaction.Commit();
         }
         catch (Exception ex)
         {
-            transaction.Rollback();
+            SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
         }
     }
@@ -284,6 +288,56 @@ public partial class BaseRepository(string connectionString)
         }
 
         return -1;
+    }
+
+    protected static void SafeRollback(DbTransaction? transaction)
+    {
+        try
+        {
+            transaction?.Rollback();
+        }
+        catch { }
+    }
+
+    protected static int ExecuteInternal(
+        IDbConnection connection,
+        string sql,
+        object? param = null,
+        IDbTransaction? transaction = null,
+        CommandType? commandType = null)
+    {
+        if (param != null)
+        {
+            param = CreateParameters(param);
+        }
+
+        return connection.Execute(sql, param, transaction, commandTimeout: CommandTimeout, commandType: commandType);
+    }
+
+    private static object CreateParameters(object param)
+    {
+        if (param is DynamicParameters)
+        {
+            return param;
+        }
+
+        var parameters = new DynamicParameters();
+        foreach (var property in param.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
+        {
+            var value = property.GetValue(param);
+            var length = property.GetCustomAttribute<LengthAttribute>()?.Length;
+
+            if (value is string)
+            {
+                parameters.Add(property.Name, value, DbType.String, size: length);
+            }
+            else
+            {
+                parameters.Add(property.Name, value);
+            }
+        }
+
+        return parameters;
     }
 
     private static double ParseSize(string? size)
