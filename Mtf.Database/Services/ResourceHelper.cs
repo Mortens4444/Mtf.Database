@@ -7,14 +7,9 @@ namespace Mtf.Database.Services;
 
 public static class ResourceHelper
 {
-    public static string GetDbScript(string scriptName, string? scriptsSubfolderName = null)
+    public static string GetDbScript(string scriptName)
     {
-        //if (String.IsNullOrEmpty(scriptsSubfolderName))
-        {
-            return ReadEmbeddedResource(String.Concat(BaseRepository.DatabaseScriptsLocation ?? "Database.Scripts", ".", scriptName, ".sql"), Encoding.UTF8);
-        }
-
-        //return ReadEmbeddedResource(String.Concat(BaseRepository.DatabaseScriptsLocation ?? "Database.Scripts", ".", scriptsSubfolderName, ".", scriptName, ".sql"), Encoding.UTF8);
+        return ReadEmbeddedResource(String.Concat(BaseRepository.DatabaseScriptsLocation ?? "Database.Scripts", ".", scriptName, ".sql"), Encoding.UTF8);
     }
 
     public static string ReadEmbeddedResource(string resourceName, Encoding encoding)
