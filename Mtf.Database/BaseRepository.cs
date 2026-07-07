@@ -299,12 +299,7 @@ public partial class BaseRepository(string connectionString)
         catch { }
     }
 
-    protected static int ExecuteInternal(
-        IDbConnection connection,
-        string sql,
-        object? param = null,
-        IDbTransaction? transaction = null,
-        CommandType? commandType = null)
+    protected static int ExecuteInternal(IDbConnection connection, string sql, object? param = null, IDbTransaction? transaction = null, CommandType? commandType = null)
     {
         if (param != null)
         {
@@ -325,9 +320,9 @@ public partial class BaseRepository(string connectionString)
         foreach (var property in param.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
         {
             var value = property.GetValue(param);
-            var length = property.GetCustomAttribute<LengthAttribute>()?.Length;
+            var length = property.GetCustomAttribute<LengthAttribute>()?.Length ?? 0;
 
-            if (value is string)
+            if (length != 0)
             {
                 parameters.Add(property.Name, value, DbType.String, size: length);
             }
