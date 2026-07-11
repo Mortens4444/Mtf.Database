@@ -2,6 +2,7 @@
 using Mtf.Database.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -18,17 +19,17 @@ public abstract class ApiBaseRepository<TEntity, TIdentifierType>(
     protected readonly ILogger logger = logger;
     protected readonly string baseEndpoint = baseEndpoint.TrimEnd('/');
 
-    public virtual async Task<List<TEntity>> GetAllAsync()
+    public virtual async Task<ReadOnlyCollection<TEntity>> GetAllAsync()
     {
         try
         {
             var response = await httpClient.GetFromJsonAsync<List<TEntity>>(baseEndpoint).ConfigureAwait(false);
-            return response ?? [];
+            return new ReadOnlyCollection<TEntity>(response ?? new List<TEntity>());
         }
         catch (Exception ex)
         {
             logger.Log(ex, "Failed to fetch all entities from {Endpoint}", baseEndpoint);
-            return [];
+            return new ReadOnlyCollection<TEntity>(new List<TEntity>());
         }
     }
 
