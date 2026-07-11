@@ -8,6 +8,8 @@ public interface IBaseRepository<TEntity, TIdentifierType>
 {
     Task<ReadOnlyCollection<TEntity>> GetAllAsync();
 
+    Task<ReadOnlyCollection<TEntity>> GetAllWhereAsync(object param);
+
     Task<TEntity?> GetByIdAsync(TIdentifierType id);
 
     Task<TEntity?> InsertAsync(TEntity entity);

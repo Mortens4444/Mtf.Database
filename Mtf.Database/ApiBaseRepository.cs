@@ -33,6 +33,22 @@ public abstract class ApiBaseRepository<TEntity, TIdentifierType>(
         }
     }
 
+    public virtual async Task<ReadOnlyCollection<TEntity>> GetAllWhereAsync(object param)
+    {
+        try
+        {
+            var responseMessage = await httpClient.PostAsJsonAsync(baseEndpoint, param).ConfigureAwait(false);
+            responseMessage.EnsureSuccessStatusCode();
+            var response = await responseMessage.Content.ReadFromJsonAsync<List<TEntity>>().ConfigureAwait(false);
+            return new ReadOnlyCollection<TEntity>(response ?? new List<TEntity>());
+        }
+        catch (Exception ex)
+        {
+            logger.Log(ex, "Failed to fetch all entities from {Endpoint}", baseEndpoint);
+            return new ReadOnlyCollection<TEntity>(new List<TEntity>());
+        }
+    }
+
     public virtual async Task<TEntity?> GetByIdAsync(TIdentifierType id)
     {
         try

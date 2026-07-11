@@ -2,219 +2,197 @@
 
 ## Overview
 
-The `Mtf.Database` library provides an abstract `BaseRepository` class for performing CRUD (Create, Read, Update, Delete) operations in SQL databases. It supports both SQLite and SQL Server, with the ability to switch between them based on a type parameter. The repository uses Dapper for simplified data access and manages SQL scripts for database operations within transactions.
+The `Mtf.Database` library provides a robust, extensible data access layer based on **Dapper**. It features an abstract `BaseRepository` and a generic `BaseRepository<TEntity, TIdentifierType>` class designed to manage CRUD operations, automatic transactions, raw query executions, syntax validations, and structured database migrations. It supports both **SQLite** and **SQL Server**, dynamically switching providers at runtime.
 
-This documentation covers setup, constructors, properties, methods, and example usage for `BaseRepository`, providing flexibility and control over database interactions in .NET applications.
+---
 
 ## Installation
 
-To use `Mtf.Database`, add the package to your project:
+To use `Mtf.Database` in your project:
 
 1. **Add Package**:
-   Run the following command in your project directory:
+```bash
+dotnet add package Mtf.Database
 
-   ```bash
-   dotnet add package Mtf.Database
-   ```
+```
+
 
 2. **Include the Namespace**:
-   Add the `Mtf.Database` namespace at the beginning of your code:
+```csharp
+using Mtf.Database;
 
-   ```csharp
-   using Mtf.Database;
-   ```
-
-## **Class: `BaseRepository`**
-
-The `BaseRepository` class serves as the base for managing database operations. It supports automatic transaction handling, script execution, and type-safe operations.
-
-### **Static Properties**
-
-| Property                  | Type             | Description                                                |
-|---------------------------|------------------|------------------------------------------------------------|
-| `DbProvider`              | `DbProviderType` | Specifies the database provider (`SQLite` or `SqlServer`). |
-| `ConnectionString`        | `string`         | Connection string for the database.                        |
-| `ScriptsToExecute`        | `List<string>`   | SQL scripts to execute during initialization.              |
-| `DatabaseScriptsAssembly` | `Assembly`       | Assembly containing embedded SQL scripts.                  |
-| `DatabaseScriptsLocation` | `string`         | Namespace location of embedded SQL scripts.                |
+```
 
 ---
 
-### Enum: DbProviderType
+## Class: `BaseRepository`
 
-Defines the database types supported by `BaseRepository`.
+The non-generic base class handles core connection configurations, direct script executions, custom raw queries, syntax parsing, and transactional fallbacks.
 
-| Value       | Description                             |
-|-------------|-----------------------------------------|
-| `SQLite`    | SQLite database engine.                 |
-| `SqlServer` | SQL Server database engine.             |
+### Static and Instance Properties
 
-### **Static Methods**
-
-#### **Transactional Script Execution**
-
-- **`Execute(string scriptName, object param = null)`**  
-  Executes a script wrapped in a transaction.
-
-  ```csharp
-  BaseRepository.Execute("UpdateServer", new { Id = 1, Name = "UpdatedServer" });
-  ```
-
-- **`ExecuteWithoutTransaction(string scriptName, object param = null)`**  
-  Executes a script without a transaction.
-
-  ```csharp
-  BaseRepository.ExecuteWithoutTransaction("InsertServer", new { Name = "NewServer" });
-  ```
-
-- **`Execute(params SqlParam[] parameters)`**  
-  Executes multiple scripts in a single transaction. Each `SqlParam` includes the script name and parameters.
-
-  ```csharp
-  BaseRepository.Execute(
-      new SqlParam("UpdateServer", new { Id = 1, Name = "UpdatedServer" }),
-      new SqlParam("DeleteServer", new { Id = 2 })
-  );
-  ```
+| Property | Type | Scope | Description |
+| --- | --- | --- | --- |
+| `ConnectionString` | `string` | Instance | The database connection string (init-only). |
+| `CommandTimeout` | `int?` | Static | Optional global command timeout setting in seconds. |
+| `DbProvider` | `DbProviderType` | Static | Specifies the active engine (`SQLite` or `SqlServer`). Default is `SqlServer`. |
+| `ScriptsToExecute` | `List<string>` | Static | Pre-registered database script names intended for migrations. |
+| `DatabaseScriptsAssembly` | `Assembly?` | Static | Assembly containing embedded SQL script resources. |
+| `DatabaseScriptsLocation` | `string?` | Static | Root namespace path to embedded SQL scripts. |
 
 ---
 
-## Class: BaseRepository<T>
+### Key Methods
 
-The `BaseRepository` class provides common database operations, such as executing scripts and querying data. The class supports both SQLite and SQL Server, with automatic handling of transactions to ensure data consistency.
+#### Migration Management
 
-### **Instance Methods (`BaseRepository<T>`)**
+* **`static void ExecuteMigrations(string connectionString)`**
+Iterates through `ScriptsToExecute`, fetches script contents via `ScriptCache`, and applies them inside a single database transaction. Rollback occurs automatically on failure, throwing a `SqlScriptExecutionException`.
 
-#### **Transaction Handling**
+#### Synchronous & Asynchronous Script Execution
 
-- **`T ExecuteInTransaction(Func<DbConnection, IDbTransaction, T> operation)`**  
-  Executes a transactional operation that returns a result.
+* **`void Execute(string scriptName, object? param = null)`**
+Executes an embedded SQL script wrapped in an isolated transaction.
+* **`Task ExecuteAsync(string scriptName, object? param = null)`**
+Asynchronous variant of `Execute` using structural async transaction handlers.
+* **`void ExecuteWithoutTransaction(string scriptName, object? param = null)`**
+Runs a script outside of an active database transaction block.
+* **`void Execute(params SqlParam[] parameters)`**
+Batch executes multiple `SqlParam` entries sequentially within a single unified transaction.
 
-  ```csharp
-  var result = repository.ExecuteInTransaction((connection, transaction) =>
-  {
-      // Perform database actions
-      return someResult;
-  });
-  ```
+#### Raw Queries and Metrics
 
-- **`void ExecuteInTransaction(Action<DbConnection, IDbTransaction> operation)`**  
-  Executes a transactional operation without returning a result.
+* **`DataTable ExecuteQuery(string query, Dictionary<string, object>? parameters = null)`**
+Executes a raw SQL statement, passing structured query parameters safely. Returns a standard `DataTable`. Throws an `ArgumentException` if the input text contains potentially destructive keywords.
+* **`string? ExecuteScalarQuery(string query)`**
+Quickly evaluates a query and returns its scalar output as a string.
+* **`int GetDatabaseUsagePercentageWithLimit()`**
+*(SQL Server exclusive)* Returns the total storage consumption percentage relative to engine limits (e.g., managing the 10GB boundary in Express editions).
 
-  ```csharp
-  repository.ExecuteInTransaction((connection, transaction) =>
-  {
-      // Perform database actions
-  });
-  ```
+#### SQL Parsing and Validation
 
----
-
-#### **Query and Execution**
-
-- **`TModelType QuerySingleOrDefault(string scriptName, object param)`**  
-  Returns a single record or `null` if none exist.
-
-  ```csharp
-  var server = repository.QuerySingleOrDefault("SelectServerById", new { Id = 1 });
-  ```
-
-- **`ReadOnlyCollection<TModelType> Query(string scriptName, object param)`**  
-  Returns a list of records matching the parameters.
-
-  ```csharp
-  var servers = repository.Query("SelectServersByLocation", new { Location = "Europe" });
-  ```
-
-- **`TResultType ExecuteScalar<TResultType>(string scriptName, object param)`**  
-  Executes a script and returns a scalar value.
-
-  ```csharp
-  int serverCount = repository.ExecuteScalar<int>("CountServers", null);
-  ```
+* **`bool HasValidSqlSyntax(string sql, bool checkDeclarations, out Exception? exception)`**
+Validates standard database script structures. Internally leverages `SET PARSEONLY ON` across processing batches without physical script commitment.
 
 ---
 
-#### **Stored Procedures**
+## Class: `BaseRepository<TEntity, TIdentifierType>`
 
-- **`ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object param = null)`**  
-  Executes a stored procedure and returns a list of results.
+An abstract generic repository enforcing strongly-typed lifecycle workflows for internal business entities.
 
-  ```csharp
-  var servers = repository.ExecuteStoredProcedure("GetAllServers", new { Status = "Active" });
-  ```
+```csharp
+public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository 
+    where TEntity : class, IHasIdentifier<TIdentifierType>
 
-- **`void ExecuteStoredProcedureNonQuery(string procedureName, object param = null)`**  
-  Executes a stored procedure without returning results.
+```
 
-  ```csharp
-  repository.ExecuteStoredProcedureNonQuery("DeactivateServer", new { Id = 1 });
-  ```
+### Script Naming Convention
+
+The repository automatically resolves operational script pathways at instantiation. It expects scripts to reside inside an embedded directory mirroring the structural layout: `{ScriptsSubfolderName}.{Operation}{EntityName}` (e.g., `Server.SelectServer`).
 
 ---
 
-#### CRUD Operations
+### Contextual Operations
 
-- **`T Select(int id)`**  
-  Retrieves a single record by ID.
+#### Custom Target Transactions
 
-- **`List<T> SelectAll()`**  
-  Retrieves all records for the entity.
+* **`TEntity ExecuteInTransaction(Func<DbConnection, IDbTransaction, TEntity> operation)`**
+Encapsulates explicit operations inside custom processing scopes returning unified state elements.
+* **`void ExecuteInTransaction(Action<DbConnection, IDbTransaction> operation)`**
+Encapsulates structural non-query operations inside structured workflows.
 
-- **`List<T> SelectWhere(object param)`**  
-  Retrieves records that match the specified parameters.
+#### Direct Queries & Stored Procedures
 
-- **`void Delete(int id)`**  
-  Deletes a single record by ID.
+* **`ReadOnlyCollection<TEntity> Query(string scriptName, object param)`** / **`QueryAsync(...)`**
+Fetches relational datasets translated into read-only structural collections.
+* **`TEntity? QuerySingleOrDefault(string scriptName, object? param = null)`**
+Returns a unique domain record matching arguments or falls back to `null`.
+* **`ReadOnlyCollection<TEntity> ExecuteStoredProcedure(string procedureName, object? param = null)`**
+Invokes concrete procedural components returning mapped entities.
 
-- **`void DeleteWhere(object param)`**  
-  Deletes records matching specified parameters.
+---
 
-### Example Usage
+### Native CRUD Operations
+
+| Method | Return Type | Strategy |
+| --- | --- | --- |
+| `Select(TIdentifierType id)` | `TEntity?` | Synch Lookup |
+| `SelectAll()` | `ReadOnlyCollection<TEntity>` | Complete Fetch |
+| `SelectWhere(object param)` | `ReadOnlyCollection<TEntity>` | Conditional Query |
+| `Insert(TEntity? model)` | `void` | Standard Persistence |
+| `InsertAndReturnId<T>(TEntity model)` | `T` (struct) | Evaluates context via `SCOPE_IDENTITY()` |
+| `Update(TEntity? model)` | `void` | Structural Modification |
+| `Delete(TIdentifierType id)` | `void` | Unique Record Erasure |
+| `DeleteWhere(object? param)` | `void` | Conditional Mass Erasure |
+
+#### Asynchronous Lifecycle Equivalents
+
+* **`Task<ReadOnlyCollection<TEntity>> GetAllAsync()`**
+* **`Task<ReadOnlyCollection<TEntity>> GetAllWhereAsync(object param)`**
+* **`Task<TEntity?> GetByIdAsync(TIdentifierType id)`**
+* **`Task<TEntity?> InsertAsync(TEntity entity)`** (Persists and returns the freshly loaded record)
+* **`Task<TEntity?> UpdateAsync(TEntity entity)`** (Updates and returns the current database state)
+* **`Task DeleteAsync(TIdentifierType id)`**
+
+---
+
+## Example Usage
 
 ```csharp
 using Mtf.Database;
-using System.Collections.Generic;
+using Mtf.Database.Enums;
+using System;
+using System.Threading.Tasks;
 
-public class ExampleUsage
+public class ServerEntity : IHasIdentifier<int>
 {
-    public static void Main()
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+}
+
+public class ServerRepository : BaseRepository<ServerEntity, int>
+{
+    public ServerRepository(string connectionString) : base(connectionString) { }
+}
+
+public class Program
+{
+    public static async Task Main()
     {
-        // Configure the repository
-        BaseRepository.DatabaseScriptsAssembly = typeof(CameraRepository<>).Assembly;
-        BaseRepository.DatabaseScriptsLocation = "Database.Scripts";
+        // 1. Global Setup Configuration
+        BaseRepository.DbProvider = DbProviderType.SqlServer;
+        BaseRepository.DatabaseScriptsAssembly = typeof(Program).Assembly;
+        BaseRepository.DatabaseScriptsLocation = "YourApp.Database.Scripts";
+        BaseRepository.CommandTimeout = 45;
 
-        BaseRepository.ConnectionString = ConfigurationManager.ConnectionStrings["MasterConnectionString"]?.ConnectionString;
-        BaseRepository.ExecuteWithoutTransaction("CreateDatabase");
-        BaseRepository.ExecuteWithoutTransaction("CreateUser");
+        // Register Migrations
+        BaseRepository.ScriptsToExecute.Add("Migration_v1_CreateTables");
+        
+        string connString = "Server=localhost;Database=LiveDB;Trusted_Connection=True;TrustServerCertificate=True;";
+        
+        // Run Database migrations
+        BaseRepository.ExecuteMigrations(connString);
 
-        BaseRepository.ConnectionString = ConfigurationManager.ConnectionStrings["LiveViewConnectionString"]?.ConnectionString;
-        BaseRepository.ExecuteWithoutTransaction("CreateTables");
+        // 2. Initialize instance repository
+        var repo = new ServerRepository(connString);
 
-        // Add initialization scripts
-        BaseRepository.ScriptsToExecute.Add("Migration_1");
-
-        // Perform database operations
-        var repository = new ServerRepository();
-
-        // Insert a new server
-        BaseRepository.Execute("InsertServer", new { Name = "NewServer", Location = "USA" });
-
-        // Retrieve all servers
-        var servers = repository.GetAll();
-        foreach (var server in servers)
+        // 3. Perform Operations Asynchronously
+        var newServer = new ServerEntity { Name = "Node-Alpha", Location = "Budapest" };
+        ServerEntity? savedServer = await repo.InsertAsync(newServer);
+        
+        if (savedServer != null)
         {
-            Console.WriteLine($"Server: {server.Name}, Location: {server.Location}");
+            Console.WriteLine($"Successfully saved entity with ID: {savedServer.Id}");
         }
 
-        // Delete a server
-        repository.Delete(1);
+        // 4. Fetch structural lists conditionally
+        var localServers = await repo.GetAllWhereAsync(new { Location = "Budapest" });
+        foreach (var server in localServers)
+        {
+            Console.WriteLine($"Active Node: {server.Name}");
+        }
     }
 }
+
 ```
-
-### Notes
-
-1. **Enhanced Transaction Management**: Automatic transaction rollback on failure ensures data consistency.
-2. **Flexible Execution**: Execute both SQL scripts and stored procedures.
-3. **Reusable Scripts**: Centralized SQL script management using embedded resources.

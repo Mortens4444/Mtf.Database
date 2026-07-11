@@ -133,14 +133,14 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         }
     }
 
-    protected ReadOnlyCollection<TEntity> Query(string scriptName)
+    public ReadOnlyCollection<TEntity> Query(string scriptName)
     {
         using var connection = CreateConnection();
         connection.Open();
         return new ReadOnlyCollection<TEntity>(connection.Query<TEntity>(ScriptCache.GetScript(scriptName)).ToList());
     }
 
-    protected async Task<ReadOnlyCollection<TEntity>> QueryAsync(string scriptName)
+    public async Task<ReadOnlyCollection<TEntity>> QueryAsync(string scriptName)
     {
         using var connection = CreateConnection();
         await connection.OpenAsync().ConfigureAwait(false);
@@ -148,28 +148,36 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         return new ReadOnlyCollection<TEntity>(results.ToList());
     }
 
-    protected ReadOnlyCollection<TEntity> Query(string scriptName, object param)
+    public ReadOnlyCollection<TEntity> Query(string scriptName, object param)
     {
         using var connection = CreateConnection();
         connection.Open();
         return new ReadOnlyCollection<TEntity>(connection.Query<TEntity>(ScriptCache.GetScript(scriptName), param).ToList());
     }
 
-    protected TEntity? QuerySingleOrDefault(string scriptName, TIdentifierType id)
+    public async Task<ReadOnlyCollection<TEntity>> QueryAsync(string scriptName, object param)
+    {
+        using var connection = CreateConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        var results = await connection.QueryAsync<TEntity>(ScriptCache.GetScript(scriptName), param).ConfigureAwait(false);
+        return new ReadOnlyCollection<TEntity>(results.ToList());
+    }
+
+    public TEntity? QuerySingleOrDefault(string scriptName, TIdentifierType id)
     {
         using var connection = CreateConnection();
         connection.Open();
         return connection.QuerySingleOrDefault<TEntity>(ScriptCache.GetScript(scriptName), new { Id = id });
     }
 
-    protected TEntity? QuerySingleOrDefault(string scriptName, object? param = null)
+    public TEntity? QuerySingleOrDefault(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
         return connection.QuerySingleOrDefault<TEntity>(ScriptCache.GetScript(scriptName), param);
     }
 
-    protected dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
+    public dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -237,6 +245,11 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
     public Task<ReadOnlyCollection<TEntity>> GetAllAsync()
     {
         return QueryAsync(SelectAllScriptName);
+    }
+
+    public Task<ReadOnlyCollection<TEntity>> GetAllWhereAsync(object param)
+    {
+        return QueryAsync(SelectWhereScriptName, param);
     }
 
     public async Task<TEntity?> InsertAsync(TEntity entity)
