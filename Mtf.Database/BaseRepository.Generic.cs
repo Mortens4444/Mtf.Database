@@ -4,7 +4,6 @@ using Mtf.Database.Exceptions;
 using Mtf.Database.Interfaces;
 using Mtf.Database.Services;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
@@ -39,7 +38,7 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         DeleteWhereScriptName = $"{ScriptsSubfolderName}.{nameof(DeleteWhere)}{typeof(TEntity).Name}";
     }
 
-    protected BaseRepository(ILogger<BaseRepository<TEntity, TIdentifierType>> logger, string connectionString) : base(connectionString)
+    protected BaseRepository(ILogger<BaseRepository<TEntity, TIdentifierType>> logger, string connectionString) : this(connectionString)
     {
         this.logger = logger;
     }
@@ -101,7 +100,7 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         catch (Exception ex)
         {
             SafeRollback(transaction);
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
         }
     }
 
@@ -130,7 +129,7 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         catch (Exception ex)
         {
             SafeRollback(transaction);
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
         }
     }
 
@@ -141,6 +140,14 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         return new ReadOnlyCollection<TEntity>(connection.Query<TEntity>(ScriptCache.GetScript(scriptName)).ToList());
     }
 
+    protected async Task<ReadOnlyCollection<TEntity>> QueryAsync(string scriptName)
+    {
+        using var connection = CreateConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        var results = await connection.QueryAsync<TEntity>(ScriptCache.GetScript(scriptName)).ConfigureAwait(false);
+        return new ReadOnlyCollection<TEntity>(results.ToList());
+    }
+
     protected ReadOnlyCollection<TEntity> Query(string scriptName, object param)
     {
         using var connection = CreateConnection();
@@ -148,14 +155,7 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         return new ReadOnlyCollection<TEntity>(connection.Query<TEntity>(ScriptCache.GetScript(scriptName), param).ToList());
     }
 
-    protected TEntity? QuerySingleOrDefault(string scriptName, long id)
-    {
-        using var connection = CreateConnection();
-        connection.Open();
-        return connection.QuerySingleOrDefault<TEntity>(ScriptCache.GetScript(scriptName), new { Id = id });
-    }
-
-    protected TEntity? QuerySingleOrDefault(string scriptName, int id)
+    protected TEntity? QuerySingleOrDefault(string scriptName, TIdentifierType id)
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -215,7 +215,7 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         catch (Exception ex)
         {
             SafeRollback(transaction);
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString ?? ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
         }
     }
 
@@ -224,12 +224,7 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         Execute(UpdateScriptName, param: model);
     }
 
-    public void Delete(long id)
-    {
-        Execute(DeleteScriptName, param: new { Id = id });
-    }
-
-    public void Delete(int id)
+    public void Delete(TIdentifierType id)
     {
         Execute(DeleteScriptName, param: new { Id = id });
     }
@@ -239,32 +234,22 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         Execute(DeleteWhereScriptName, param: param);
     }
 
-    public Task<List<TEntity>> GetAllAsync()
+    public Task<ReadOnlyCollection<TEntity>> GetAllAsync()
     {
-        var result = SelectAll();
-        return Task.FromResult(result?.ToList() ?? []);
+        return QueryAsync(SelectAllScriptName);
     }
 
-    public Task<TEntity?> GetByIdAsync(Guid id)
-    {
-        var result = QuerySingleOrDefault($"{ScriptsSubfolderName}.Select{ScriptsSubfolderName}", new { Id = id });
-        return Task.FromResult(result);
-    }
-
-    public Task DeleteAsync(Guid id)
-    {
-        Execute($"{ScriptsSubfolderName}.Delete{ScriptsSubfolderName}", new { Id = id });
-        return Task.CompletedTask;
-    }
-
-    public Task<TEntity?> InsertAsync(TEntity entity)
+    public async Task<TEntity?> InsertAsync(TEntity entity)
     {
         try
         {
-            Execute($"{ScriptsSubfolderName}.Insert{ScriptsSubfolderName}", entity);
-
-            var result = QuerySingleOrDefault($"{ScriptsSubfolderName}.Select{ScriptsSubfolderName}", new { entity.Id });
-            return Task.FromResult(result);
+            await ExecuteAsync(InsertScriptName, entity).ConfigureAwait(false);
+            
+            using var connection = CreateConnection();
+            await connection.OpenAsync().ConfigureAwait(false);
+            return await connection.QuerySingleOrDefaultAsync<TEntity>(
+                ScriptCache.GetScript(SelectScriptName), new { entity.Id }
+            ).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -273,14 +258,17 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         }
     }
 
-    public Task<TEntity?> UpdateAsync(TEntity entity)
+    public async Task<TEntity?> UpdateAsync(TEntity entity)
     {
         try
         {
-            Execute($"{ScriptsSubfolderName}.Update{ScriptsSubfolderName}", entity);
-
-            var result = QuerySingleOrDefault($"{ScriptsSubfolderName}.Select{ScriptsSubfolderName}", new { entity.Id });
-            return Task.FromResult(result);
+            await ExecuteAsync(UpdateScriptName, entity).ConfigureAwait(false);
+            
+            using var connection = CreateConnection();
+            await connection.OpenAsync().ConfigureAwait(false);
+            return await connection.QuerySingleOrDefaultAsync<TEntity>(
+                ScriptCache.GetScript(SelectScriptName), new { entity.Id }
+            ).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -293,11 +281,11 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
     {
         using var connection = CreateConnection();
         await connection.OpenAsync().ConfigureAwait(false);
-        return await connection.QuerySingleOrDefaultAsync<TEntity>(ScriptCache.GetScript(SelectScriptName), id).ConfigureAwait(false);
+        return await connection.QuerySingleOrDefaultAsync<TEntity>(ScriptCache.GetScript(SelectScriptName), new { Id = id }).ConfigureAwait(false);
     }
 
     public Task DeleteAsync(TIdentifierType id)
     {
-        throw new NotImplementedException();
+        return ExecuteAsync(DeleteScriptName, new { Id = id });
     }
 }

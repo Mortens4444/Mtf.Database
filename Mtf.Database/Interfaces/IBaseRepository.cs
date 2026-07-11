@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 
 namespace Mtf.Database.Interfaces;
@@ -6,7 +6,7 @@ namespace Mtf.Database.Interfaces;
 public interface IBaseRepository<TEntity, TIdentifierType>
     where TEntity : class, IHasIdentifier<TIdentifierType>
 {
-    Task<List<TEntity>> GetAllAsync();
+    Task<ReadOnlyCollection<TEntity>> GetAllAsync();
 
     Task<TEntity?> GetByIdAsync(TIdentifierType id);
 

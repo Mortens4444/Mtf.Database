@@ -16,9 +16,7 @@ public interface IRepository<TModelType, TIdentifierType>
 
     void Update(TModelType model);
 
-    void Delete(int id);
-
-    void Delete(long id);
+    void Delete(TIdentifierType id);
 
     void DeleteWhere(object param);
 }
