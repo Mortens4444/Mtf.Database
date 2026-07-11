@@ -2,11 +2,9 @@
 
 namespace Mtf.Database.Interfaces;
 
-public interface IRepository<TModelType>
+public interface IRepository<TModelType, TIdentifierType>
 {
-    TModelType? Select(long id);
-
-    TModelType? Select(int id);
+    TModelType? Select(TIdentifierType id);
 
     ReadOnlyCollection<TModelType> SelectAll();
 

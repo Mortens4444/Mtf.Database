@@ -14,6 +14,7 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace Mtf.Database;
 
@@ -94,6 +95,27 @@ public partial class BaseRepository(string connectionString)
         catch (Exception ex)
         {
             SafeRollback(transaction);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
+        }
+    }
+
+    public async Task ExecuteAsync(string scriptName, object? param = null)
+    {
+        using var connection = CreateConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+        var lastScript = String.Empty;
+
+        try
+        {
+            lastScript = scriptName;
+            var sql = ScriptCache.GetScript(scriptName);
+            await ExecuteInternalAsync(connection, sql, param, transaction).ConfigureAwait(false);
+            await transaction.CommitAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await SafeRollbackAsync(transaction).ConfigureAwait(false);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
         }
     }
@@ -299,6 +321,20 @@ public partial class BaseRepository(string connectionString)
         catch { }
     }
 
+    protected static async Task SafeRollbackAsync(DbTransaction? transaction)
+    {
+        try
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync().ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     protected static int ExecuteInternal(IDbConnection connection, string sql, object? param = null, IDbTransaction? transaction = null, CommandType? commandType = null)
     {
         if (param != null)
@@ -307,6 +343,16 @@ public partial class BaseRepository(string connectionString)
         }
 
         return connection.Execute(sql, param, transaction, commandTimeout: CommandTimeout, commandType: commandType);
+    }
+
+    protected static Task<int> ExecuteInternalAsync(IDbConnection connection, string sql, object? param = null, IDbTransaction? transaction = null, CommandType? commandType = null)
+    {
+        if (param != null)
+        {
+            param = CreateParameters(param);
+        }
+
+        return connection.ExecuteAsync(sql, param, transaction, commandTimeout: CommandTimeout, commandType: commandType);
     }
 
     private static object CreateParameters(object param)

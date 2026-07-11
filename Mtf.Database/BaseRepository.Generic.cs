@@ -14,10 +14,10 @@ using static Dapper.SqlMapper;
 
 namespace Mtf.Database;
 
-public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<TModelType>
-    where TModelType : class, IHasIdentifier<long>
+public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository, IBaseRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>
+    where TEntity : class, IHasIdentifier<TIdentifierType>
 {
-    public string ScriptsSubfolderName { get; } = typeof(TModelType).Name;
+    public string ScriptsSubfolderName { get; } = typeof(TEntity).Name;
 
     private readonly string SelectScriptName;
     private readonly string SelectAllScriptName;
@@ -26,25 +26,25 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     private readonly string UpdateScriptName;
     private readonly string DeleteScriptName;
     private readonly string DeleteWhereScriptName;
-    private readonly ILogger<BaseRepository<TModelType>>? logger;
+    private readonly ILogger<BaseRepository<TEntity, TIdentifierType>>? logger;
 
     protected BaseRepository(string connectionString) : base(connectionString)
     {
-        SelectScriptName = $"{ScriptsSubfolderName}.{nameof(Select)}{typeof(TModelType).Name}";
-        SelectAllScriptName = $"{ScriptsSubfolderName}.{nameof(SelectAll)}{typeof(TModelType).Name}";
-        SelectWhereScriptName = $"{ScriptsSubfolderName}.{nameof(SelectWhere)}{typeof(TModelType).Name}";
-        InsertScriptName = $"{ScriptsSubfolderName}.{nameof(Insert)}{typeof(TModelType).Name}";
-        UpdateScriptName = $"{ScriptsSubfolderName}.{nameof(Update)}{typeof(TModelType).Name}";
-        DeleteScriptName = $"{ScriptsSubfolderName}.{nameof(Delete)}{typeof(TModelType).Name}";
-        DeleteWhereScriptName = $"{ScriptsSubfolderName}.{nameof(DeleteWhere)}{typeof(TModelType).Name}";
+        SelectScriptName = $"{ScriptsSubfolderName}.{nameof(Select)}{typeof(TEntity).Name}";
+        SelectAllScriptName = $"{ScriptsSubfolderName}.{nameof(SelectAll)}{typeof(TEntity).Name}";
+        SelectWhereScriptName = $"{ScriptsSubfolderName}.{nameof(SelectWhere)}{typeof(TEntity).Name}";
+        InsertScriptName = $"{ScriptsSubfolderName}.{nameof(Insert)}{typeof(TEntity).Name}";
+        UpdateScriptName = $"{ScriptsSubfolderName}.{nameof(Update)}{typeof(TEntity).Name}";
+        DeleteScriptName = $"{ScriptsSubfolderName}.{nameof(Delete)}{typeof(TEntity).Name}";
+        DeleteWhereScriptName = $"{ScriptsSubfolderName}.{nameof(DeleteWhere)}{typeof(TEntity).Name}";
     }
 
-    protected BaseRepository(ILogger<BaseRepository<TModelType>> logger, string connectionString) : base(connectionString)
+    protected BaseRepository(ILogger<BaseRepository<TEntity, TIdentifierType>> logger, string connectionString) : base(connectionString)
     {
         this.logger = logger;
     }
 
-    protected TModelType ExecuteInTransaction(Func<DbConnection, IDbTransaction, TModelType> operation)
+    protected TEntity ExecuteInTransaction(Func<DbConnection, IDbTransaction, TEntity> operation)
     {
         ArgumentNullException.ThrowIfNull(operation);
 
@@ -105,12 +105,12 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
     }
 
-    protected ReadOnlyCollection<TModelType> ExecuteStoredProcedure(string procedureName, object? param = null)
+    protected ReadOnlyCollection<TEntity> ExecuteStoredProcedure(string procedureName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return new ReadOnlyCollection<TModelType>(
-            connection.Query<TModelType>(procedureName, param, commandType: CommandType.StoredProcedure).ToList()
+        return new ReadOnlyCollection<TEntity>(
+            connection.Query<TEntity>(procedureName, param, commandType: CommandType.StoredProcedure).ToList()
         );
     }
 
@@ -134,39 +134,39 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
     }
 
-    protected ReadOnlyCollection<TModelType> Query(string scriptName)
+    protected ReadOnlyCollection<TEntity> Query(string scriptName)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName)).ToList());
+        return new ReadOnlyCollection<TEntity>(connection.Query<TEntity>(ScriptCache.GetScript(scriptName)).ToList());
     }
 
-    protected ReadOnlyCollection<TModelType> Query(string scriptName, object param)
+    protected ReadOnlyCollection<TEntity> Query(string scriptName, object param)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return new ReadOnlyCollection<TModelType>(connection.Query<TModelType>(ScriptCache.GetScript(scriptName), param).ToList());
+        return new ReadOnlyCollection<TEntity>(connection.Query<TEntity>(ScriptCache.GetScript(scriptName), param).ToList());
     }
 
-    protected TModelType? QuerySingleOrDefault(string scriptName, long id)
+    protected TEntity? QuerySingleOrDefault(string scriptName, long id)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
+        return connection.QuerySingleOrDefault<TEntity>(ScriptCache.GetScript(scriptName), new { Id = id });
     }
 
-    protected TModelType? QuerySingleOrDefault(string scriptName, int id)
+    protected TEntity? QuerySingleOrDefault(string scriptName, int id)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), new { Id = id });
+        return connection.QuerySingleOrDefault<TEntity>(ScriptCache.GetScript(scriptName), new { Id = id });
     }
 
-    protected TModelType? QuerySingleOrDefault(string scriptName, object? param = null)
+    protected TEntity? QuerySingleOrDefault(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
         connection.Open();
-        return connection.QuerySingleOrDefault<TModelType>(ScriptCache.GetScript(scriptName), param);
+        return connection.QuerySingleOrDefault<TEntity>(ScriptCache.GetScript(scriptName), param);
     }
 
     protected dynamic? QuerySingleOrDefaultWithDynamic(string scriptName, object? param = null)
@@ -176,32 +176,27 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         return connection.QuerySingleOrDefault<dynamic>(ScriptCache.GetScript(scriptName), param);
     }
 
-    public TModelType? Select(long id)
+    public TEntity? Select(TIdentifierType id)
     {
         return QuerySingleOrDefault(SelectScriptName, id);
     }
 
-    public TModelType? Select(int id)
-    {
-        return QuerySingleOrDefault(SelectScriptName, id);
-    }
-
-    public ReadOnlyCollection<TModelType> SelectAll()
+    public ReadOnlyCollection<TEntity> SelectAll()
     {
         return Query(SelectAllScriptName);
     }
 
-    public ReadOnlyCollection<TModelType> SelectWhere(object param)
+    public ReadOnlyCollection<TEntity> SelectWhere(object param)
     {
         return Query(SelectWhereScriptName, param);
     }
 
-    public void Insert(TModelType? model)
+    public void Insert(TEntity? model)
     {
         Execute(InsertScriptName, param: model);
     }
 
-    public T InsertAndReturnId<T>(TModelType model) where T : struct
+    public T InsertAndReturnId<T>(TEntity model) where T : struct
     {
         using var connection = CreateConnection();
         connection.Open();
@@ -224,7 +219,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
     }
 
-    public void Update(TModelType? model)
+    public void Update(TEntity? model)
     {
         Execute(UpdateScriptName, param: model);
     }
@@ -244,13 +239,13 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         Execute(DeleteWhereScriptName, param: param);
     }
 
-    public Task<List<TModelType>> GetAllAsync()
+    public Task<List<TEntity>> GetAllAsync()
     {
         var result = SelectAll();
         return Task.FromResult(result?.ToList() ?? []);
     }
 
-    public Task<TModelType?> GetByIdAsync(Guid id)
+    public Task<TEntity?> GetByIdAsync(Guid id)
     {
         var result = QuerySingleOrDefault($"{ScriptsSubfolderName}.Select{ScriptsSubfolderName}", new { Id = id });
         return Task.FromResult(result);
@@ -262,7 +257,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         return Task.CompletedTask;
     }
 
-    public Task<TModelType?> InsertAsync(TModelType entity)
+    public Task<TEntity?> InsertAsync(TEntity entity)
     {
         try
         {
@@ -278,7 +273,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         }
     }
 
-    public Task<TModelType?> UpdateAsync(TModelType entity)
+    public Task<TEntity?> UpdateAsync(TEntity entity)
     {
         try
         {
@@ -292,5 +287,17 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
             logger?.Log(ex);
             throw;
         }
+    }
+
+    public async Task<TEntity?> GetByIdAsync(TIdentifierType id)
+    {
+        using var connection = CreateConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        return await connection.QuerySingleOrDefaultAsync<TEntity>(ScriptCache.GetScript(SelectScriptName), id).ConfigureAwait(false);
+    }
+
+    public Task DeleteAsync(TIdentifierType id)
+    {
+        throw new NotImplementedException();
     }
 }
