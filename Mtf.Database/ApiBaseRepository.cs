@@ -14,9 +14,9 @@ public abstract class ApiBaseRepository<TEntity, TIdentifierType>(
     string baseEndpoint) : IBaseRepository<TEntity, TIdentifierType>
     where TEntity : class, IHasIdentifier<TIdentifierType>
 {
-    private readonly HttpClient httpClient = httpClient;
-    private readonly ILogger logger = logger;
-    private readonly string baseEndpoint = baseEndpoint.TrimEnd('/');
+    protected readonly HttpClient httpClient = httpClient;
+    protected readonly ILogger logger = logger;
+    protected readonly string baseEndpoint = baseEndpoint.TrimEnd('/');
 
     public virtual async Task<List<TEntity>> GetAllAsync()
     {
