@@ -1,16 +1,21 @@
 ﻿using Dapper;
+using Microsoft.Extensions.Logging;
 using Mtf.Database.Exceptions;
 using Mtf.Database.Interfaces;
 using Mtf.Database.Services;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
+using System.Threading.Tasks;
+using static Dapper.SqlMapper;
 
 namespace Mtf.Database;
 
 public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<TModelType>
+    where TModelType : class, IHasIdentifier<long>
 {
     public string ScriptsSubfolderName { get; } = typeof(TModelType).Name;
 
@@ -21,6 +26,7 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     private readonly string UpdateScriptName;
     private readonly string DeleteScriptName;
     private readonly string DeleteWhereScriptName;
+    private readonly ILogger<BaseRepository<TModelType>>? logger;
 
     protected BaseRepository(string connectionString) : base(connectionString)
     {
@@ -31,6 +37,11 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
         UpdateScriptName = $"{ScriptsSubfolderName}.{nameof(Update)}{typeof(TModelType).Name}";
         DeleteScriptName = $"{ScriptsSubfolderName}.{nameof(Delete)}{typeof(TModelType).Name}";
         DeleteWhereScriptName = $"{ScriptsSubfolderName}.{nameof(DeleteWhere)}{typeof(TModelType).Name}";
+    }
+
+    protected BaseRepository(ILogger<BaseRepository<TModelType>> logger, string connectionString) : base(connectionString)
+    {
+        this.logger = logger;
     }
 
     protected TModelType ExecuteInTransaction(Func<DbConnection, IDbTransaction, TModelType> operation)
@@ -231,5 +242,55 @@ public abstract class BaseRepository<TModelType> : BaseRepository, IRepository<T
     public void DeleteWhere(object? param)
     {
         Execute(DeleteWhereScriptName, param: param);
+    }
+
+    public Task<List<TModelType>> GetAllAsync()
+    {
+        var result = SelectAll();
+        return Task.FromResult(result?.ToList() ?? []);
+    }
+
+    public Task<TModelType?> GetByIdAsync(Guid id)
+    {
+        var result = QuerySingleOrDefault($"{ScriptsSubfolderName}.Select{ScriptsSubfolderName}", new { Id = id });
+        return Task.FromResult(result);
+    }
+
+    public Task DeleteAsync(Guid id)
+    {
+        Execute($"{ScriptsSubfolderName}.Delete{ScriptsSubfolderName}", new { Id = id });
+        return Task.CompletedTask;
+    }
+
+    public Task<TModelType?> InsertAsync(TModelType entity)
+    {
+        try
+        {
+            Execute($"{ScriptsSubfolderName}.Insert{ScriptsSubfolderName}", entity);
+
+            var result = QuerySingleOrDefault($"{ScriptsSubfolderName}.Select{ScriptsSubfolderName}", new { entity.Id });
+            return Task.FromResult(result);
+        }
+        catch (Exception ex)
+        {
+            logger?.Log(ex);
+            throw;
+        }
+    }
+
+    public Task<TModelType?> UpdateAsync(TModelType entity)
+    {
+        try
+        {
+            Execute($"{ScriptsSubfolderName}.Update{ScriptsSubfolderName}", entity);
+
+            var result = QuerySingleOrDefault($"{ScriptsSubfolderName}.Select{ScriptsSubfolderName}", new { entity.Id });
+            return Task.FromResult(result);
+        }
+        catch (Exception ex)
+        {
+            logger?.Log(ex);
+            throw;
+        }
     }
 }

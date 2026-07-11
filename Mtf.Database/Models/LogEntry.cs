@@ -1,8 +1,11 @@
-﻿namespace Mtf.Database.Test;
+﻿using Mtf.Database.Interfaces;
+using System;
 
-public class LogEntry
+namespace Mtf.Database.Models;
+
+public class LogEntry : IHasIdentifier<long>
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public long Id { get; set; }
 
     public string Severity { get; set; } = "Error";
 

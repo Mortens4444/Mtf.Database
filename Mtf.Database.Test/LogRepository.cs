@@ -1,4 +1,6 @@
-﻿namespace Mtf.Database.Test;
+﻿using Mtf.Database.Models;
+
+namespace Mtf.Database.Test;
 
 internal class LogRepository : BaseRepository<LogEntry>
 {
