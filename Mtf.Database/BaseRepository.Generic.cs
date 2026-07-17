@@ -82,6 +82,29 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         }
     }
 
+    protected async Task<TResultType> ExecuteInTransactionAsync<TResultType>(
+        Func<DbConnection, DbTransaction, Task<TResultType>> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+
+        await using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
+
+        try
+        {
+            var result = await operation(connection, transaction).ConfigureAwait(false);
+            await transaction.CommitAsync().ConfigureAwait(false);
+            return result;
+        }
+        catch
+        {
+            await SafeRollbackAsync(transaction).ConfigureAwait(false);
+            throw;
+        }
+    }
+
     protected TResultType? ExecuteScalar<TResultType>(string scriptName, object? param = null)
     {
         using var connection = CreateConnection();
