@@ -15,24 +15,12 @@ public static partial class ILoggerExtensions
         var exceptionDetails = String.Concat(msg, " - ", exception.ToFullExceptionString());
 
         LogError(logger, exceptionDetails);
-
-#if DEBUG
-        throw new Exception(exceptionDetails, exception);
-#else
-        throw new Exception(exception.Message, exception);
-#endif
     }
 
     public static void Log(this ILogger logger, Exception exception)
     {
         var exceptionDetails = exception.ToFullExceptionString();
         LogError(logger, exceptionDetails);
-
-#if DEBUG
-        throw new Exception(exceptionDetails, exception);
-#else
-        throw new Exception(exception.Message, exception);
-#endif
     }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "An error occurred: {Message}")]

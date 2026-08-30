@@ -3,8 +3,11 @@ using Mtf.Database.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Threading.Tasks;
 
 namespace Mtf.Database;
@@ -33,20 +36,37 @@ public abstract class ApiBaseRepository<TEntity, TIdentifierType>(
         }
     }
 
+    /// <summary>
+    /// Filters entities via a plain GET with <paramref name="param"/>'s properties encoded as a query
+    /// string - never via POST to <see cref="baseEndpoint"/>, which a conventional REST controller
+    /// treats as Create. A server only returns a filtered result if it has a matching endpoint that
+    /// reads those query parameters (e.g. an ASP.NET Core action inferring a complex parameter as
+    /// <c>[FromQuery]</c>); without one, this degrades to returning the full unfiltered list rather
+    /// than corrupting data, unlike the previous POST-based implementation.
+    /// </summary>
     public virtual async Task<ReadOnlyCollection<TEntity>> GetAllWhereAsync(object param)
     {
         try
         {
-            var responseMessage = await httpClient.PostAsJsonAsync(baseEndpoint, param).ConfigureAwait(false);
-            responseMessage.EnsureSuccessStatusCode();
-            var response = await responseMessage.Content.ReadFromJsonAsync<List<TEntity>>().ConfigureAwait(false);
+            var response = await httpClient.GetFromJsonAsync<List<TEntity>>(BuildWhereRequestUri(param)).ConfigureAwait(false);
             return new ReadOnlyCollection<TEntity>(response ?? new List<TEntity>());
         }
         catch (Exception ex)
         {
-            logger.Log(ex, "Failed to fetch all entities from {Endpoint}", baseEndpoint);
+            logger.Log(ex, "Failed to fetch filtered entities from {Endpoint}", baseEndpoint);
             return new ReadOnlyCollection<TEntity>(new List<TEntity>());
         }
+    }
+
+    private string BuildWhereRequestUri(object param)
+    {
+        var query = string.Join("&", param.GetType()
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => (property.Name, Value: property.GetValue(param)))
+            .Where(pair => pair.Value != null)
+            .Select(pair => $"{Uri.EscapeDataString(pair.Name)}={Uri.EscapeDataString(Convert.ToString(pair.Value, CultureInfo.InvariantCulture) ?? string.Empty)}"));
+
+        return query.Length == 0 ? baseEndpoint : $"{baseEndpoint}?{query}";
     }
 
     public virtual async Task<TEntity?> GetByIdAsync(TIdentifierType id)
