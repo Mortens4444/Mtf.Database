@@ -366,7 +366,15 @@ public partial class BaseRepository(string connectionString)
         foreach (var property in param.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
         {
             var value = property.GetValue(param);
-            var length = property.GetCustomAttribute<LengthAttribute>()?.Length ?? 0;
+            // SQLite has no column lengths, so a parameter size there would only truncate values.
+            var length = DbProvider == DbProviderType.SQLite ? 0 : property.GetCustomAttribute<LengthAttribute>()?.Length ?? 0;
+
+            // ADO.NET providers silently truncate a string longer than the parameter size, which loses
+            // data without any error - fail loudly instead.
+            if (length > 0 && value is string text && text.Length > length)
+            {
+                throw new ArgumentException($"{param.GetType().Name}.{property.Name} is {text.Length} characters long, but at most {length} can be stored.", nameof(param));
+            }
 
             if (length != 0)
             {
