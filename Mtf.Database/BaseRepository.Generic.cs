@@ -107,15 +107,15 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
 
     protected TResultType? ExecuteScalar<TResultType>(string scriptName, object? param = null)
     {
+        var sql = LoadScript(scriptName);
+        ValidateParameters(sql, param);
+
         using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
-        var lastScript = String.Empty;
 
         try
         {
-            lastScript = scriptName;
-            var sql = ScriptCache.GetScript(scriptName);
             var result = connection.ExecuteScalar<TResultType>(sql, param, transaction, CommandTimeout);
             transaction.Commit();
             return result;
@@ -123,12 +123,14 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         catch (Exception ex)
         {
             SafeRollback(transaction);
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), scriptName, ex);
         }
     }
 
     protected ReadOnlyCollection<TEntity> ExecuteStoredProcedure(string procedureName, object? param = null)
     {
+        ValidateParameters(procedureName, param, CommandType.StoredProcedure);
+
         using var connection = CreateConnection();
         connection.Open();
         return new ReadOnlyCollection<TEntity>(
@@ -138,21 +140,21 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
 
     protected void ExecuteStoredProcedureNonQuery(string procedureName, object? param = null)
     {
+        ValidateParameters(procedureName, param, CommandType.StoredProcedure);
+
         using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
-        var lastScript = String.Empty;
 
         try
         {
-            lastScript = procedureName;
             ExecuteInternal(connection, procedureName, param, transaction, CommandType.StoredProcedure);
             transaction.Commit();
         }
         catch (Exception ex)
         {
             SafeRollback(transaction);
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), procedureName, ex);
         }
     }
 
@@ -229,16 +231,17 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
 
     public T InsertAndReturnId<T>(TEntity model) where T : struct
     {
+        var sql = LoadScript(InsertScriptName);
+        ValidateParameters(sql, model);
+
         using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
-        var lastScript = String.Empty;
 
         try
         {
-            lastScript = InsertScriptName;
-            var typeName = TypeMapping.Mappings.ContainsKey(typeof(T)) ? TypeMapping.Mappings[typeof(T)] : typeof(T).Name.ToUpperInvariant();
-            var query = $"{ScriptCache.GetScript(InsertScriptName)}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
+            var typeName = TypeMapping.Mappings.TryGetValue(typeof(T), out var mappedName) ? mappedName : typeof(T).Name.ToUpperInvariant();
+            var query = $"{sql}; SELECT CAST(SCOPE_IDENTITY() AS {typeName});";
             var result = connection.ExecuteScalar<T>(query, model, transaction, CommandTimeout);
             transaction.Commit();
             return result;
@@ -246,7 +249,7 @@ public abstract class BaseRepository<TEntity, TIdentifierType> : BaseRepository,
         catch (Exception ex)
         {
             SafeRollback(transaction);
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), InsertScriptName, ex);
         }
     }
 

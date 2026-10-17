@@ -1,0 +1,1 @@
+INSERT INTO NoSuchTable (Id) VALUES (1);

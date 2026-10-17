@@ -74,6 +74,33 @@ Quickly evaluates a query and returns its scalar output as a string.
 * **`bool HasValidSqlSyntax(string sql, bool checkDeclarations, out Exception? exception)`**
 Validates standard database script structures. Internally leverages `SET PARSEONLY ON` across processing batches without physical script commitment.
 
+#### Parameters and Column Length Validation
+
+Parameter objects are handed to Dapper as they are, so everything Dapper binds works: plain objects and anonymous types (only the properties the script references are bound), `Dictionary<string, object>`, `DynamicParameters`, and collections for multi-exec (the script runs once per element).
+
+A string property can declare the maximum length of its column with `[Length(n)]` from `Mtf.Database.Attributes` (which derives from `MaxLengthAttribute`), or with the BCL `[MaxLength(n)]`, `[StringLength(n)]` or `[Length(min, max)]` from `System.ComponentModel.DataAnnotations`. Before a script, stored procedure or `InsertAndReturnId` runs, the repository checks every annotated string property the command binds and throws `ValueTooLongException` (an `ArgumentException` carrying `TypeName`, `PropertyName`, `MaxLength` and `ActualLength`) when a value is longer than declared. The check runs before any connection is opened and is never wrapped in `SqlScriptExecutionException`. Trailing spaces beyond the limit are ignored, as SQL Server ignores them. Values are never truncated client-side: without a declared length an over-long value is rejected by the database itself (SQL Server error 2628), or stored in full on SQLite, which has no column lengths.
+
+```csharp
+public class ServerEntity : IHasIdentifier<int>
+{
+    public int Id { get; set; }
+
+    [Length(50)]
+    public string Name { get; set; } = string.Empty;
+}
+
+try
+{
+    repo.Insert(new ServerEntity { Name = new string('x', 60) });
+}
+catch (ValueTooLongException ex)
+{
+    // ex.PropertyName == "Name", ex.MaxLength == 50, ex.ActualLength == 60
+}
+```
+
+Only the properties a text script references are validated, so an over-long value in a column the script does not write does not block the script. Stored procedures bind every property, so every annotated property is validated for them. Subclasses calling the protected `ExecuteInternal` directly can run the same check with the protected `ValidateParameters(sql, param, commandType)`.
+
 ---
 
 ## Class: `BaseRepository<TEntity, TIdentifierType>`

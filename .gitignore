@@ -7,3 +7,4 @@
 publish.bat
 nuget.config*
 *.zip
+**/TestResults/

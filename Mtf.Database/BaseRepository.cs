@@ -1,7 +1,6 @@
 ﻿using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
-using Mtf.Database.Attributes;
 using Mtf.Database.Enums;
 using Mtf.Database.Exceptions;
 using Mtf.Database.Models;
@@ -73,56 +72,76 @@ public partial class BaseRepository(string connectionString)
 
     public void ExecuteWithoutTransaction(string scriptName, object? param = null)
     {
+        var sql = ScriptCache.GetScript(scriptName);
+        ValidateParameters(sql, param);
+
         using var connection = CreateConnection();
         connection.Open();
-        ExecuteInternal(connection, ScriptCache.GetScript(scriptName), param);
+        ExecuteInternal(connection, sql, param);
     }
 
     public void Execute(string scriptName, object? param = null)
     {
+        var sql = LoadScript(scriptName);
+        ValidateParameters(sql, param);
+
         using var connection = CreateConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
-        var lastScript = String.Empty;
 
         try
         {
-            lastScript = scriptName;
-            var sql = ScriptCache.GetScript(scriptName);
             ExecuteInternal(connection, sql, param, transaction);
             transaction.Commit();
         }
         catch (Exception ex)
         {
             SafeRollback(transaction);
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), scriptName, ex);
         }
     }
 
     public async Task ExecuteAsync(string scriptName, object? param = null)
     {
+        var sql = LoadScript(scriptName);
+        ValidateParameters(sql, param);
+
         using var connection = CreateConnection();
         await connection.OpenAsync().ConfigureAwait(false);
         using var transaction = await connection.BeginTransactionAsync().ConfigureAwait(false);
-        var lastScript = String.Empty;
 
         try
         {
-            lastScript = scriptName;
-            var sql = ScriptCache.GetScript(scriptName);
             await ExecuteInternalAsync(connection, sql, param, transaction).ConfigureAwait(false);
             await transaction.CommitAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             await SafeRollbackAsync(transaction).ConfigureAwait(false);
-            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), scriptName, ex);
         }
     }
 
     public void Execute(params SqlParam[] parameters)
     {
         if (parameters == null || parameters.Length == 0)
+        {
+            return;
+        }
+
+        // Load and validate everything up front, so a bad script or value fails before any I/O happens.
+        var scripts = new List<(string ScriptName, string Sql, object? Param)>(parameters.Length);
+        foreach (var parameter in parameters)
+        {
+            if (parameter != null)
+            {
+                var sql = LoadScript(parameter.ScriptName);
+                ValidateParameters(sql, parameter.Param);
+                scripts.Add((parameter.ScriptName, sql, parameter.Param));
+            }
+        }
+
+        if (scripts.Count == 0)
         {
             return;
         }
@@ -134,14 +153,10 @@ public partial class BaseRepository(string connectionString)
 
         try
         {
-            foreach (var parameter in parameters)
+            foreach (var (scriptName, sql, param) in scripts)
             {
-                if (parameter != null)
-                {
-                    lastScript = parameter.ScriptName;
-                    var sql = ScriptCache.GetScript(parameter.ScriptName);
-                    ExecuteInternal(connection, sql, parameter.Param, transaction);
-                }
+                lastScript = scriptName;
+                ExecuteInternal(connection, sql, param, transaction);
             }
             transaction.Commit();
         }
@@ -149,6 +164,22 @@ public partial class BaseRepository(string connectionString)
         {
             SafeRollback(transaction);
             throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), lastScript, ex);
+        }
+    }
+
+    /// <summary>
+    /// Loads a script from the cache, reporting a missing or unreadable script as a
+    /// <see cref="SqlScriptExecutionException"/> for the script, like any other execution failure.
+    /// </summary>
+    protected string LoadScript(string scriptName)
+    {
+        try
+        {
+            return ScriptCache.GetScript(scriptName);
+        }
+        catch (Exception ex)
+        {
+            throw new SqlScriptExecutionException(Utils.GetDatabaseName(ConnectionString), scriptName, ex);
         }
     }
 
@@ -335,58 +366,32 @@ public partial class BaseRepository(string connectionString)
         }
     }
 
+    /// <summary>
+    /// Executes <paramref name="sql"/> through Dapper with <paramref name="param"/> bound as-is (objects, dictionaries,
+    /// collections for multi-exec and <see cref="DynamicParameters"/> all work the way they do in Dapper).
+    /// No parameter sizes are set, so an over-long value is rejected by the database instead of being truncated.
+    /// Declared lengths are validated by the public repository methods before any I/O; callers of this method
+    /// can do the same with the repository's validation step.
+    /// </summary>
     protected static int ExecuteInternal(IDbConnection connection, string sql, object? param = null, IDbTransaction? transaction = null, CommandType? commandType = null)
     {
-        if (param != null)
-        {
-            param = CreateParameters(param);
-        }
-
         return connection.Execute(sql, param, transaction, commandTimeout: CommandTimeout, commandType: commandType);
     }
 
     protected static Task<int> ExecuteInternalAsync(IDbConnection connection, string sql, object? param = null, IDbTransaction? transaction = null, CommandType? commandType = null)
     {
-        if (param != null)
-        {
-            param = CreateParameters(param);
-        }
-
         return connection.ExecuteAsync(sql, param, transaction, commandTimeout: CommandTimeout, commandType: commandType);
     }
 
-    private static object CreateParameters(object param)
+    /// <summary>
+    /// Validates the declared maximum lengths (<see cref="Attributes.LengthAttribute"/>, <c>[MaxLength]</c>,
+    /// <c>[StringLength]</c>) of the string properties of <paramref name="param"/> that <paramref name="sql"/>
+    /// references. Stored procedures bind every property, so pass <see cref="CommandType.StoredProcedure"/> for them.
+    /// </summary>
+    /// <exception cref="ValueTooLongException">A string property is longer than its declared maximum.</exception>
+    protected static void ValidateParameters(string sql, object? param, CommandType commandType = CommandType.Text)
     {
-        if (param is DynamicParameters)
-        {
-            return param;
-        }
-
-        var parameters = new DynamicParameters();
-        foreach (var property in param.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
-        {
-            var value = property.GetValue(param);
-            // SQLite has no column lengths, so a parameter size there would only truncate values.
-            var length = DbProvider == DbProviderType.SQLite ? 0 : property.GetCustomAttribute<LengthAttribute>()?.Length ?? 0;
-
-            // ADO.NET providers silently truncate a string longer than the parameter size, which loses
-            // data without any error - fail loudly instead.
-            if (length > 0 && value is string text && text.Length > length)
-            {
-                throw new ArgumentException($"{param.GetType().Name}.{property.Name} is {text.Length} characters long, but at most {length} can be stored.", nameof(param));
-            }
-
-            if (length != 0)
-            {
-                parameters.Add(property.Name, value, DbType.String, size: length);
-            }
-            else
-            {
-                parameters.Add(property.Name, value);
-            }
-        }
-
-        return parameters;
+        ParameterValidator.Validate(sql, param, commandType);
     }
 
     private static double ParseSize(string? size)
